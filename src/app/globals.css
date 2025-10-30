@@ -1,0 +1,43 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f5f6f9;
+  --surface: #ffffff;
+  --surface-muted: #f9f4f5;
+  --border: #e1e5ec;
+  --primary: #c8102e;
+  --primary-hover: #a60d26;
+  --on-primary: #ffffff;
+  --secondary: #0b1f3a;
+  --secondary-accent: #1c3b63;
+  --accent: #e4002b;
+  --text-primary: #1a1d26;
+  --text-secondary: #4a5162;
+  --icon: #1a1d26;
+  --shadow-soft: 0 18px 40px -20px rgba(11, 31, 58, 0.3);
+  --radius-card: 20px;
+  --radius-button: 12px;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--text-primary);
+  --font-sans: var(--font-body);
+  --font-heading: var(--font-heading);
+}
+
+body {
+  background-color: var(--background);
+  color: var(--text-primary);
+  font-family: var(--font-body), system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", sans-serif;
+}
+
+.font-heading {
+  font-family: var(--font-heading), "Montserrat", "Helvetica Neue",
+    Helvetica, Arial, sans-serif;
+}
+
+.font-body {
+  font-family: var(--font-body), "Source Sans 3", "Segoe UI", sans-serif;
+}
