@@ -1,0 +1,252 @@
+import Link from "next/link";
+
+import { Navbar } from "@/components/navbar";
+
+const inputStyles =
+  "w-full rounded-lg border border-neutral-200 bg-white px-4 py-2 text-sm shadow-sm outline-none transition focus:border-[var(--primary)] focus:ring-2 focus:ring-[rgba(200,16,46,0.2)]";
+
+const labelStyles = "text-sm font-medium text-neutral-700";
+
+export function LoginPage() {
+  return (
+    <div
+      className="min-h-screen bg-neutral-100"
+      style={{ backgroundColor: "var(--background)" }}
+    >
+      <Navbar />
+      <main className="mx-auto flex max-w-6xl flex-col gap-12 px-6 py-12 lg:flex-row lg:py-20">
+        <section className="flex w-full flex-col justify-center gap-6 rounded-2xl border border-neutral-200 bg-white p-8 shadow-md lg:max-w-md">
+          <p
+            className="font-heading text-xs font-semibold uppercase tracking-wider"
+            style={{ color: "var(--primary)" }}
+          >
+            Makerspace Portal
+          </p>
+          <h1 className="text-3xl font-semibold text-neutral-900">
+            Welcome back, Makers!
+          </h1>
+          <p
+            className="text-sm text-neutral-600"
+            style={{ color: "var(--text-secondary)" }}
+          >
+            Log into your account to manage reservations, track equipment
+            certifications, and stay on top of your project milestones.
+          </p>
+          <form className="mt-4 space-y-4" aria-label="Log in form">
+            <div className="space-y-2">
+              <label htmlFor="login-email" className={labelStyles}>
+                University Email
+              </label>
+              <input
+                id="login-email"
+                name="email"
+                type="email"
+                autoComplete="email"
+                placeholder="you@spartans.ut.edu"
+                className={inputStyles}
+              />
+            </div>
+            <div className="space-y-2">
+              <label htmlFor="login-password" className={labelStyles}>
+                Password
+              </label>
+              <input
+                id="login-password"
+                name="password"
+                type="password"
+                autoComplete="current-password"
+                placeholder="Enter your password"
+                className={inputStyles}
+              />
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <label className="flex items-center gap-2 text-neutral-600">
+                <input
+                  type="checkbox"
+                  name="remember"
+                  className="h-4 w-4 rounded border-neutral-300 text-[var(--primary)] focus:ring-[rgba(200,16,46,0.3)]"
+                />
+                Remember me
+              </label>
+              <Link
+                href="#"
+                className="font-semibold transition hover:opacity-80"
+                style={{ color: "var(--primary)" }}
+              >
+                Forgot password?
+              </Link>
+            </div>
+            <button
+              type="submit"
+              className="w-full rounded-lg px-4 py-2 text-sm font-semibold text-white shadow transition hover:brightness-90"
+              style={{
+                backgroundColor: "var(--primary)",
+                boxShadow: "var(--shadow-soft)",
+              }}
+            >
+              Log in
+            </button>
+          </form>
+          <p className="text-sm text-neutral-600">
+            Need an account?{" "}
+            <a
+              href="#create-account"
+              className="font-semibold transition hover:opacity-80"
+              style={{ color: "var(--primary)" }}
+            >
+              Create one below
+            </a>
+          </p>
+        </section>
+        <section
+          id="create-account"
+          className="flex w-full flex-1 flex-col justify-center gap-8 rounded-2xl border p-8 shadow-inner"
+          style={{
+            borderColor: "rgba(200, 16, 46, 0.12)",
+            background:
+              "linear-gradient(135deg, rgba(200,16,46,0.05), rgba(10,31,58,0.03))",
+          }}
+        >
+          <div className="space-y-2">
+            <h2
+              className="text-2xl font-semibold text-neutral-900"
+              style={{ color: "var(--text-primary)" }}
+            >
+              Create a Makerspace Account
+            </h2>
+            <p
+              className="text-sm text-neutral-600"
+              style={{ color: "var(--text-secondary)" }}
+            >
+              Unlock fabrication equipment, schedule workshops, and collaborate
+              with fellow innovators. Provide your basic information so we can
+              get you started.
+            </p>
+          </div>
+          <form
+            className="grid grid-cols-1 gap-4 md:grid-cols-2"
+            aria-label="Create account form"
+          >
+            <div className="space-y-2">
+              <label htmlFor="signup-first-name" className={labelStyles}>
+                First Name
+              </label>
+              <input
+                id="signup-first-name"
+                name="firstName"
+                type="text"
+                placeholder="Taylor"
+                autoComplete="given-name"
+                className={inputStyles}
+              />
+            </div>
+            <div className="space-y-2">
+              <label htmlFor="signup-last-name" className={labelStyles}>
+                Last Name
+              </label>
+              <input
+                id="signup-last-name"
+                name="lastName"
+                type="text"
+                placeholder="Rivera"
+                autoComplete="family-name"
+                className={inputStyles}
+              />
+            </div>
+            <div className="space-y-2">
+              <label htmlFor="signup-email" className={labelStyles}>
+                University Email
+              </label>
+              <input
+                id="signup-email"
+                name="email"
+                type="email"
+                placeholder="you@spartans.ut.edu"
+                autoComplete="email"
+                className={inputStyles}
+              />
+            </div>
+            <div className="space-y-2">
+              <label htmlFor="signup-major" className={labelStyles}>
+                Program or Major
+              </label>
+              <input
+                id="signup-major"
+                name="major"
+                type="text"
+                placeholder="Design & Technical Theatre"
+                className={inputStyles}
+              />
+            </div>
+            <div className="space-y-2">
+              <label htmlFor="signup-password" className={labelStyles}>
+                Password
+              </label>
+              <input
+                id="signup-password"
+                name="password"
+                type="password"
+                placeholder="Create a password"
+                autoComplete="new-password"
+                className={inputStyles}
+              />
+            </div>
+            <div className="space-y-2">
+              <label htmlFor="signup-confirm" className={labelStyles}>
+                Confirm Password
+              </label>
+              <input
+                id="signup-confirm"
+                name="confirmPassword"
+                type="password"
+                placeholder="Re-enter your password"
+                autoComplete="new-password"
+                className={inputStyles}
+              />
+            </div>
+            <div className="md:col-span-2">
+              <label className="flex items-start gap-3 text-xs text-neutral-600">
+                <input
+                  type="checkbox"
+                  name="terms"
+                  className="mt-1 h-4 w-4 rounded border-neutral-300 text-[var(--primary)] focus:ring-[rgba(200,16,46,0.3)]"
+                />
+                I agree to follow all makerspace safety guidelines, attend
+                required training, and uphold the University of Tampa code of
+                conduct.
+              </label>
+            </div>
+            <div className="md:col-span-2">
+              <button
+                type="submit"
+                className="w-full rounded-lg border px-4 py-2 text-sm font-semibold text-white shadow transition hover:brightness-95"
+                style={{
+                  backgroundColor: "var(--primary)",
+                  borderColor: "var(--primary)",
+                  boxShadow: "var(--shadow-soft)",
+                }}
+              >
+                Create account
+              </button>
+            </div>
+          </form>
+          <div className="space-y-3 rounded-xl border border-white/60 bg-white/80 p-6 text-sm text-neutral-600 shadow-sm">
+            <p className="font-semibold text-neutral-800">
+              What happens next?
+            </p>
+            <ul className="space-y-2">
+              <li>• A makerspace coordinator will verify your eligibility.</li>
+              <li>
+                • You will receive an email with training requirements and next
+                steps.
+              </li>
+              <li>
+                • Once approved, you can reserve machines and join workshops.
+              </li>
+            </ul>
+          </div>
+        </section>
+      </main>
+    </div>
+  );
+}
