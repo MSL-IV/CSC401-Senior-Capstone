@@ -9,7 +9,7 @@ export function Reserve() {
   const equipment = [
     { id: "3dp", name: "3D Printer", slotMinutes: 60 },
     { id: "laser", name: "Laser Cutter", slotMinutes: 30 },
-    { id: "cnc", name: "CNC Router", slotMinutes: 90 },
+    { id: "solder", name: "Soldering Board", slotMinutes: 90 },
   ];
 
   return (
