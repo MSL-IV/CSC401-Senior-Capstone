@@ -36,7 +36,7 @@ const UserIcon = () => (
 );
 
 const navLinks = [
-  { name: "Home", href: "#" },
+  { name: "Home", href: "/" },
   { name: "Reserve a Time", href: "/reserve" },
   { name: "Equipment Status", href: "#" },
   { name: "About", href: "#" },
