@@ -37,7 +37,7 @@ const heroSlides = [
       },
       {
         label: "Equipment Status",
-        href: "#",
+        href: "/equipment-status",
         variant: "secondary" as const,
       },
     ],
