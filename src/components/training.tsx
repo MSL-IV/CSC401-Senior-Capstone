@@ -1,3 +1,5 @@
+// use http://localhost:3000/training to see
+
 "use client";
 
 import { Navbar } from "@/components/navbar";
