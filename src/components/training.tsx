@@ -76,7 +76,7 @@ export function Training() {
                     </div>
 
                     {/* Video and Exam Section */}
-                    <div className="mt-10 mx-auto max-w-md">
+                    <div className="mx-auto mt-10 max-w-md pb-12">
                         <label
                             htmlFor="equipment"
                             className="block text-sm font-medium text-gray-700 mb-2"
