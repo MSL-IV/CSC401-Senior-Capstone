@@ -1,4 +1,5 @@
 // use http://localhost:3000/training to see
+// Add the video and exams later
 
 "use client";
 
