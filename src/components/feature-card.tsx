@@ -1,13 +1,15 @@
+import Link from "next/link";
 import { ReactNode } from "react";
 
 type FeatureCardProps = {
   icon: ReactNode;
   title: string;
   description: string;
+  href?: string;
 };
 
-export function FeatureCard({ icon, title, description }: FeatureCardProps) {
-  return (
+export function FeatureCard({ icon, title, description, href }: FeatureCardProps) {
+  const CardContent = () => (
     <div
       className="flex h-full flex-col gap-3 border p-6 text-left shadow-sm transition hover:-translate-y-1 hover:shadow-lg"
       style={{
@@ -34,4 +36,14 @@ export function FeatureCard({ icon, title, description }: FeatureCardProps) {
       </div>
     </div>
   );
+
+  if (href) {
+    return (
+      <Link href={href} aria-label={title} className="block h-full">
+        <CardContent />
+      </Link>
+    );
+  }
+
+  return <CardContent />;
 }

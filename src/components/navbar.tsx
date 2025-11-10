@@ -1,4 +1,10 @@
+"use client";
+
 import Image from "next/image";
+import Link from "next/link";
+import { useEffect, useState } from "react";
+import { createClient } from "@/utils/supabase/client";
+import type { User } from "@supabase/supabase-js";
 const SearchIcon = () => (
   <svg
     viewBox="0 0 24 24"
@@ -36,13 +42,42 @@ const UserIcon = () => (
 );
 
 const navLinks = [
-  { name: "Home", href: "#" },
+  { name: "Home", href: "/" },
   { name: "Reserve a Time", href: "/reserve" },
-  { name: "Equipment Status", href: "#" },
-  { name: "About", href: "#" },
+  { name: "Equipment Status", href: "/equipment-status" },
+  { name: "About", href: "/about" },
 ];
 
 export function Navbar() {
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+  const supabase = createClient();
+
+  useEffect(() => {
+    // Get initial session
+    const getSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      setUser(session?.user ?? null);
+      setLoading(false);
+    };
+
+    getSession();
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        setUser(session?.user ?? null);
+        setLoading(false);
+      }
+    );
+
+    return () => subscription.unsubscribe();
+  }, [supabase.auth]);
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+  };
+
   return (
     <header
       className="border-b shadow-sm"
@@ -94,17 +129,40 @@ export function Navbar() {
             >
               <SearchIcon />
             </button>
-            <button
-              type="button"
-              className="rounded-full border border-transparent p-1 transition hover:border-white/50"
-              aria-label="Account"
-              style={{
-                color: "rgba(255,255,255,0.88)",
-                backgroundColor: "rgba(255,255,255,0.08)",
-              }}
-            >
-              <UserIcon />
-            </button>
+{loading ? (
+              <button
+                type="button"
+                className="rounded-full border border-transparent p-1 transition hover:border-white/50"
+                aria-label="Loading"
+                style={{
+                  color: "rgba(255,255,255,0.88)",
+                  backgroundColor: "rgba(255,255,255,0.08)",
+                }}
+              >
+                <UserIcon />
+              </button>
+            ) : user ? (
+              <div className="flex items-center gap-3">
+                <span className="hidden text-sm font-medium md:block" style={{ color: "rgba(255,255,255,0.88)" }}>
+                  {user.user_metadata?.first_name || user.email}
+                </span>
+                <button
+                  onClick={handleSignOut}
+                  className="rounded-lg border border-white/30 px-3 py-1 text-sm font-medium transition hover:bg-white/10"
+                  style={{ color: "rgba(255,255,255,0.88)" }}
+                >
+                  Sign out
+                </button>
+              </div>
+            ) : (
+              <Link
+                href="/auth"
+                className="rounded-lg border border-white/30 px-3 py-1 text-sm font-medium transition hover:bg-white/10"
+                style={{ color: "rgba(255,255,255,0.88)" }}
+              >
+                Sign in
+              </Link>
+            )}
           </div>
         </div>
       </div>
