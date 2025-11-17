@@ -14,10 +14,10 @@ const labelStyles = "text-sm font-medium text-neutral-700";
 export function LoginPage() {
   const [loginData, setLoginData] = useState({ email: "", password: "", remember: false });
   const [signupData, setSignupData] = useState({
-    firstName: "",
-    lastName: "",
+    first_name: "",
+    last_name: "",
     email: "",
-    major: "",
+    student_id: "",
     password: "",
     confirmPassword: "",
     terms: false,
@@ -81,9 +81,9 @@ export function LoginPage() {
         password: signupData.password,
         options: {
           data: {
-            first_name: signupData.firstName,
-            last_name: signupData.lastName,
-            major: signupData.major,
+            first_name: signupData.first_name,
+            last_name: signupData.last_name,
+            student_id: signupData.student_id,
           },
         },
       });
@@ -94,10 +94,10 @@ export function LoginPage() {
         setSignupSuccess(true);
         // Reset form
         setSignupData({
-          firstName: "",
-          lastName: "",
+          first_name: "",
+          last_name: "",
           email: "",
-          major: "",
+          student_id: "",
           password: "",
           confirmPassword: "",
           terms: false,
@@ -264,8 +264,8 @@ export function LoginPage() {
                 placeholder="Taylor"
                 autoComplete="given-name"
                 className={inputStyles}
-                value={signupData.firstName}
-                onChange={(e) => setSignupData({ ...signupData, firstName: e.target.value })}
+                value={signupData.first_name}
+                onChange={(e) => setSignupData({ ...signupData, first_name: e.target.value })}
                 required
               />
             </div>
@@ -280,8 +280,8 @@ export function LoginPage() {
                 placeholder="Rivera"
                 autoComplete="family-name"
                 className={inputStyles}
-                value={signupData.lastName}
-                onChange={(e) => setSignupData({ ...signupData, lastName: e.target.value })}
+                value={signupData.last_name}
+                onChange={(e) => setSignupData({ ...signupData, last_name: e.target.value })}
                 required
               />
             </div>
@@ -303,16 +303,16 @@ export function LoginPage() {
             </div>
             <div className="space-y-2">
               <label htmlFor="signup-major" className={labelStyles}>
-                Program or Major
+                Student ID Number
               </label>
               <input
                 id="signup-major"
-                name="major"
+                name="student_id"
                 type="text"
-                placeholder="Design & Technical Theatre"
+                placeholder="Your ID number"
                 className={inputStyles}
-                value={signupData.major}
-                onChange={(e) => setSignupData({ ...signupData, major: e.target.value })}
+                value={signupData.student_id}
+                onChange={(e) => setSignupData({ ...signupData, student_id: e.target.value })}
                 required
               />
             </div>
