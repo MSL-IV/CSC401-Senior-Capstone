@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 import { Navbar } from "@/components/navbar";
@@ -31,6 +31,15 @@ export function LoginPage() {
   const router = useRouter();
   const supabase = createClient();
 
+  // Check environment variables
+  useEffect(() => {
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY) {
+      console.error('Supabase environment variables are missing!');
+      setLoginError('Configuration error: Supabase credentials not found');
+      setSignupError('Configuration error: Supabase credentials not found');
+    }
+  }, []);
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginLoading(true);
@@ -49,11 +58,14 @@ export function LoginPage() {
         router.push("/");
       }
     } catch (error) {
-      setLoginError("An unexpected error occurred. Please try again.");
+      console.error('Unexpected login error:', error);
+      setLoginError(`Login failed: ${error instanceof Error ? error.message : 'Please try again.'}`);
     } finally {
       setLoginLoading(false);
     }
   };
+
+
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -89,7 +101,8 @@ export function LoginPage() {
       });
 
       if (error) {
-        setSignupError(error.message);
+        console.error('Supabase signup error:', error);
+        setSignupError(`Registration failed: ${error.message}`);
       } else {
         setSignupSuccess(true);
         // Reset form
@@ -104,7 +117,8 @@ export function LoginPage() {
         });
       }
     } catch (error) {
-      setSignupError("An unexpected error occurred. Please try again.");
+      console.error('Unexpected signup error:', error);
+      setSignupError(`An unexpected error occurred: ${error instanceof Error ? error.message : 'Please try again.'}`);
     } finally {
       setSignupLoading(false);
     }
