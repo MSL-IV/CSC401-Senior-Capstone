@@ -1,5 +1,9 @@
-import Link from "next/link";
+"use client";
 
+import Link from "next/link";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { createClient } from "@/utils/supabase/client";
 import { Navbar } from "@/components/navbar";
 
 const inputStyles =
@@ -8,6 +12,117 @@ const inputStyles =
 const labelStyles = "text-sm font-medium text-neutral-700";
 
 export function LoginPage() {
+  const [loginData, setLoginData] = useState({ email: "", password: "", remember: false });
+  const [signupData, setSignupData] = useState({
+    first_name: "",
+    last_name: "",
+    email: "",
+    student_id: "",
+    password: "",
+    confirmPassword: "",
+    terms: false,
+  });
+  const [loginLoading, setLoginLoading] = useState(false);
+  const [signupLoading, setSignupLoading] = useState(false);
+  const [loginError, setLoginError] = useState("");
+  const [signupError, setSignupError] = useState("");
+  const [signupSuccess, setSignupSuccess] = useState(false);
+  
+  const router = useRouter();
+  const supabase = createClient();
+
+  // Check environment variables
+  useEffect(() => {
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY) {
+      console.error('Supabase environment variables are missing!');
+      setLoginError('Configuration error: Supabase credentials not found');
+      setSignupError('Configuration error: Supabase credentials not found');
+    }
+  }, []);
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoginLoading(true);
+    setLoginError("");
+
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: loginData.email,
+        password: loginData.password,
+      });
+
+      if (error) {
+        setLoginError(error.message);
+      } else {
+        // Redirect to dashboard or home page on successful login
+        router.push("/");
+      }
+    } catch (error) {
+      console.error('Unexpected login error:', error);
+      setLoginError(`Login failed: ${error instanceof Error ? error.message : 'Please try again.'}`);
+    } finally {
+      setLoginLoading(false);
+    }
+  };
+
+
+
+  const handleSignup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSignupLoading(true);
+    setSignupError("");
+    setSignupSuccess(false);
+
+    // Validate passwords match
+    if (signupData.password !== signupData.confirmPassword) {
+      setSignupError("Passwords do not match.");
+      setSignupLoading(false);
+      return;
+    }
+
+    // Validate terms acceptance
+    if (!signupData.terms) {
+      setSignupError("Please accept the terms and conditions.");
+      setSignupLoading(false);
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email: signupData.email,
+        password: signupData.password,
+        options: {
+          data: {
+            first_name: signupData.first_name,
+            last_name: signupData.last_name,
+            student_id: signupData.student_id,
+          },
+        },
+      });
+
+      if (error) {
+        console.error('Supabase signup error:', error);
+        setSignupError(`Registration failed: ${error.message}`);
+      } else {
+        setSignupSuccess(true);
+        // Reset form
+        setSignupData({
+          first_name: "",
+          last_name: "",
+          email: "",
+          student_id: "",
+          password: "",
+          confirmPassword: "",
+          terms: false,
+        });
+      }
+    } catch (error) {
+      console.error('Unexpected signup error:', error);
+      setSignupError(`An unexpected error occurred: ${error instanceof Error ? error.message : 'Please try again.'}`);
+    } finally {
+      setSignupLoading(false);
+    }
+  };
   return (
     <div
       className="min-h-screen bg-neutral-100"
@@ -32,7 +147,12 @@ export function LoginPage() {
             Log into your account to manage reservations, track equipment
             certifications, and stay on top of your project milestones.
           </p>
-          <form className="mt-4 space-y-4" aria-label="Log in form">
+          {loginError && (
+            <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">
+              {loginError}
+            </div>
+          )}
+          <form onSubmit={handleLogin} className="mt-4 space-y-4" aria-label="Log in form">
             <div className="space-y-2">
               <label htmlFor="login-email" className={labelStyles}>
                 University Email
@@ -44,6 +164,9 @@ export function LoginPage() {
                 autoComplete="email"
                 placeholder="you@spartans.ut.edu"
                 className={inputStyles}
+                value={loginData.email}
+                onChange={(e) => setLoginData({ ...loginData, email: e.target.value })}
+                required
               />
             </div>
             <div className="space-y-2">
@@ -57,6 +180,9 @@ export function LoginPage() {
                 autoComplete="current-password"
                 placeholder="Enter your password"
                 className={inputStyles}
+                value={loginData.password}
+                onChange={(e) => setLoginData({ ...loginData, password: e.target.value })}
+                required
               />
             </div>
             <div className="flex items-center justify-between text-sm">
@@ -65,6 +191,8 @@ export function LoginPage() {
                   type="checkbox"
                   name="remember"
                   className="h-4 w-4 rounded border-neutral-300 text-[var(--primary)] focus:ring-[rgba(200,16,46,0.3)]"
+                  checked={loginData.remember}
+                  onChange={(e) => setLoginData({ ...loginData, remember: e.target.checked })}
                 />
                 Remember me
               </label>
@@ -78,13 +206,14 @@ export function LoginPage() {
             </div>
             <button
               type="submit"
-              className="w-full rounded-lg px-4 py-2 text-sm font-semibold text-white shadow transition hover:brightness-90"
+              disabled={loginLoading}
+              className="w-full rounded-lg px-4 py-2 text-sm font-semibold text-white shadow transition hover:brightness-90 disabled:opacity-50"
               style={{
                 backgroundColor: "var(--primary)",
                 boxShadow: "var(--shadow-soft)",
               }}
             >
-              Log in
+              {loginLoading ? "Logging in..." : "Log in"}
             </button>
           </form>
           <p className="text-sm text-neutral-600">
@@ -123,7 +252,18 @@ export function LoginPage() {
               get you started.
             </p>
           </div>
+          {signupError && (
+            <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">
+              {signupError}
+            </div>
+          )}
+          {signupSuccess && (
+            <div className="rounded-lg bg-green-50 p-3 text-sm text-green-700">
+              Account created successfully! Please check your email to verify your account.
+            </div>
+          )}
           <form
+            onSubmit={handleSignup}
             className="grid grid-cols-1 gap-4 md:grid-cols-2"
             aria-label="Create account form"
           >
@@ -138,6 +278,9 @@ export function LoginPage() {
                 placeholder="Taylor"
                 autoComplete="given-name"
                 className={inputStyles}
+                value={signupData.first_name}
+                onChange={(e) => setSignupData({ ...signupData, first_name: e.target.value })}
+                required
               />
             </div>
             <div className="space-y-2">
@@ -151,6 +294,9 @@ export function LoginPage() {
                 placeholder="Rivera"
                 autoComplete="family-name"
                 className={inputStyles}
+                value={signupData.last_name}
+                onChange={(e) => setSignupData({ ...signupData, last_name: e.target.value })}
+                required
               />
             </div>
             <div className="space-y-2">
@@ -164,18 +310,24 @@ export function LoginPage() {
                 placeholder="you@spartans.ut.edu"
                 autoComplete="email"
                 className={inputStyles}
+                value={signupData.email}
+                onChange={(e) => setSignupData({ ...signupData, email: e.target.value })}
+                required
               />
             </div>
             <div className="space-y-2">
               <label htmlFor="signup-major" className={labelStyles}>
-                Program or Major
+                Student ID Number
               </label>
               <input
                 id="signup-major"
-                name="major"
+                name="student_id"
                 type="text"
-                placeholder="Design & Technical Theatre"
+                placeholder="Your ID number"
                 className={inputStyles}
+                value={signupData.student_id}
+                onChange={(e) => setSignupData({ ...signupData, student_id: e.target.value })}
+                required
               />
             </div>
             <div className="space-y-2">
@@ -189,6 +341,10 @@ export function LoginPage() {
                 placeholder="Create a password"
                 autoComplete="new-password"
                 className={inputStyles}
+                value={signupData.password}
+                onChange={(e) => setSignupData({ ...signupData, password: e.target.value })}
+                required
+                minLength={6}
               />
             </div>
             <div className="space-y-2">
@@ -202,6 +358,9 @@ export function LoginPage() {
                 placeholder="Re-enter your password"
                 autoComplete="new-password"
                 className={inputStyles}
+                value={signupData.confirmPassword}
+                onChange={(e) => setSignupData({ ...signupData, confirmPassword: e.target.value })}
+                required
               />
             </div>
             <div className="md:col-span-2">
@@ -210,6 +369,9 @@ export function LoginPage() {
                   type="checkbox"
                   name="terms"
                   className="mt-1 h-4 w-4 rounded border-neutral-300 text-[var(--primary)] focus:ring-[rgba(200,16,46,0.3)]"
+                  checked={signupData.terms}
+                  onChange={(e) => setSignupData({ ...signupData, terms: e.target.checked })}
+                  required
                 />
                 I agree to follow all makerspace safety guidelines, attend
                 required training, and uphold the University of Tampa code of
@@ -219,14 +381,15 @@ export function LoginPage() {
             <div className="md:col-span-2">
               <button
                 type="submit"
-                className="w-full rounded-lg border px-4 py-2 text-sm font-semibold text-white shadow transition hover:brightness-95"
+                disabled={signupLoading}
+                className="w-full rounded-lg border px-4 py-2 text-sm font-semibold text-white shadow transition hover:brightness-95 disabled:opacity-50"
                 style={{
                   backgroundColor: "var(--primary)",
                   borderColor: "var(--primary)",
                   boxShadow: "var(--shadow-soft)",
                 }}
               >
-                Create account
+                {signupLoading ? "Creating account..." : "Create account"}
               </button>
             </div>
           </form>
