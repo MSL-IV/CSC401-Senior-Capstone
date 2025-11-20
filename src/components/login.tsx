@@ -36,17 +36,43 @@ export function LoginPage() {
     setLoginLoading(true);
     setLoginError("");
 
+    console.log('Attempting login with:', { email: loginData.email });
+
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
         email: loginData.email,
         password: loginData.password,
       });
 
+      console.log('Login result:', { 
+        user: data?.user?.id, 
+        session: !!data?.session,
+        error: error?.message 
+      });
+
       if (error) {
         setLoginError(error.message);
-      } else {
+        console.error('Login error:', error);
+      } else if (data?.session) {
+        console.log('Login successful, session created');
+        
+        // Check if session is actually stored
+        const { data: { session: storedSession } } = await supabase.auth.getSession();
+        console.log('Session verification:', { 
+          stored: !!storedSession, 
+          accessToken: storedSession?.access_token ? 'present' : 'missing' 
+        });
+        
+        // Check localStorage after login
+        const authKeys = Object.keys(localStorage).filter(key => 
+          key.includes('supabase') || key.includes('auth')
+        );
+        console.log('Post-login localStorage keys:', authKeys);
+        
         // Redirect to dashboard or home page on successful login
         router.push("/");
+      } else {
+        setLoginError('Login successful but no session created');
       }
     } catch (error) {
       setLoginError("An unexpected error occurred. Please try again.");
