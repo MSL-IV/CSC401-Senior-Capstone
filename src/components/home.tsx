@@ -14,12 +14,12 @@ const heroSlides = [
     buttons: [
       {
         label: "Create an Account",
-        href: "#",
+        href: "/auth",
         variant: "primary" as const,
       },
       {
         label: "Log-in",
-        href: "#",
+        href: "/auth",
         variant: "secondary" as const,
       },
     ],
@@ -32,12 +32,12 @@ const heroSlides = [
     buttons: [
       {
         label: "Reserve Equipment",
-        href: "#",
+        href: "/reserve",
         variant: "primary" as const,
       },
       {
         label: "Equipment Status",
-        href: "#",
+        href: "/equipment-status",
         variant: "secondary" as const,
       },
     ],
@@ -50,7 +50,7 @@ const heroSlides = [
     buttons: [
       {
         label: "About the Makerspace",
-        href: "#",
+        href: "/about",
         variant: "primary" as const,
       },
     ],
@@ -95,6 +95,7 @@ const features = [
     title: "Workshops & Training",
     description:
       "Join sessions on CAD modeling, soldering, and safety certification.",
+    href: "/training",
     icon: (
       <svg
         viewBox="0 0 48 48"
@@ -296,12 +297,13 @@ export function Home() {
           </div>
         </section>
         <section className="grid gap-6 md:grid-cols-3">
-          {features.map((feature) => (
+          {features.map(({ title, description, icon, href }) => (
             <FeatureCard
-              key={feature.title}
-              icon={feature.icon}
-              title={feature.title}
-              description={feature.description}
+              key={title}
+              icon={icon}
+              title={title}
+              description={description}
+              href={href}
             />
           ))}
         </section>
