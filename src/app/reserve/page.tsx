@@ -10,7 +10,7 @@ export default async function ReservePage() {
 
   const { data, error } = await supabase
     .from("machines")
-    .select("id, name, slot_minutes, active")
+    .select("id, name, slot_minutes, open_time, close_time, active")
     .eq("active", true)
     .order("name", { ascending: true });
 
@@ -28,6 +28,8 @@ export default async function ReservePage() {
       id: m.id as string,
       name: m.name as string,
       slotMinutes: m.slot_minutes ?? 30,
+      openTime: m.open_time ?? "09:00:00",
+      closeTime: m.close_time ?? "17:00:00",
     })) ?? [];
 
   return <Reserve equipment={equipment} />;

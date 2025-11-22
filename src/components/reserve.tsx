@@ -8,6 +8,8 @@ type Equipment = {
   id: string;
   name: string;
   slotMinutes: number;
+  openTime: string;
+  closeTime: string;
 };
 
 export function Reserve({ equipment }: { equipment: Equipment[] }) {
