@@ -27,9 +27,21 @@ function generateSlots(
   return out;
 }
 
-export default function ReserveForm({ equipment }: { equipment: Equip[] }) {
+export default function ReserveForm({
+  equipment = [],
+}: {
+  equipment?: Equip[];
+}) {
+  if (!equipment || equipment.length === 0) {
+    return (
+      <div className="text-sm text-gray-500">
+        No equipment available yet. Please check back later.
+      </div>
+    );
+  }
   const [date, setDate] = useState(toISODate(new Date()));
-  const [machineId, setMachineId] = useState(equipment[0]?.id ?? "");
+  const [machineId, setMachineId] = useState(() => equipment[0]?.id ?? "");
+
   const machine = useMemo(
     () => equipment.find((e) => e.id === machineId) ?? equipment[0],
     [machineId, equipment]
