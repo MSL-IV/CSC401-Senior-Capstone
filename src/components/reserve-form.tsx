@@ -1,8 +1,15 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { createClient as createBrowserClient } from "@/utils/supabase/client";
 
-type Equip = { id: string; name: string; slotMinutes: number };
+type Equip = {
+  id: string;
+  name: string;
+  slotMinutes: number;
+  openTime: string;
+  closeTime: string;
+};
 type Slot = { start: Date; end: Date };
 
 function toISODate(d: Date) {
@@ -12,10 +19,13 @@ function toISODate(d: Date) {
 
 function generateSlots(
   day: string,
-  open = "09:00",
-  close = "21:00",
+  openTime = "09:00:00",
+  closeTime = "21:00:00",
   stepMinutes = 30
 ): Slot[] {
+  const open = openTime.slice(0, 5);
+  const close = closeTime.slice(0, 5);
+
   const start = new Date(`${day}T${open}:00`);
   const end = new Date(`${day}T${close}:00`);
   const out: Slot[] = [];
@@ -27,9 +37,21 @@ function generateSlots(
   return out;
 }
 
-export default function ReserveForm({ equipment }: { equipment: Equip[] }) {
+export default function ReserveForm({
+  equipment = [],
+}: {
+  equipment?: Equip[];
+}) {
+  if (!equipment || equipment.length === 0) {
+    return (
+      <div className="text-sm text-gray-500">
+        No equipment available yet. Please check back later.
+      </div>
+    );
+  }
   const [date, setDate] = useState(toISODate(new Date()));
-  const [machineId, setMachineId] = useState(equipment[0]?.id ?? "");
+  const [machineId, setMachineId] = useState(() => equipment[0]?.id ?? "");
+
   const machine = useMemo(
     () => equipment.find((e) => e.id === machineId) ?? equipment[0],
     [machineId, equipment]
@@ -37,35 +59,77 @@ export default function ReserveForm({ equipment }: { equipment: Equip[] }) {
 
   const [selected, setSelected] = useState<Slot | null>(null);
   const [message, setMessage] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const slots = useMemo(() => {
     const step = machine?.slotMinutes ?? 30;
-    return generateSlots(date, "09:00", "21:00", step);
+    const open = machine?.openTime ?? "09:00:00";
+    const close = machine?.closeTime ?? "21:00:00";
+    return generateSlots(date, open, close, step);
   }, [date, machine]);
 
   const now = new Date();
   const isPast = (s: Slot) => s.end < now && date === toISODate(now);
 
-  function onSubmit(e: React.FormEvent) {
+  async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!date || !machineId || !selected) {
+    setMessage("");
+
+    if (!date || !machineId || !selected || !machine) {
       setMessage("Please choose a date, equipment, and a time slot.");
       return;
     }
-    const eqName = equipment.find((e) => e.id === machineId)?.name ?? machineId;
-    const fmt = (d: Date) =>
-      d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-    setMessage(
-      `Selected: ${date} • ${fmt(selected.start)}–${fmt(
-        selected.end
-      )} • ${eqName}`
-    );
-    console.log({
-      date,
-      machineId,
-      start: selected.start.toISOString(),
-      end: selected.end.toISOString(),
-    });
+
+    setLoading(true);
+    try {
+      const supabase = createBrowserClient();
+
+      // Get the logged-in user
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
+
+      if (userError || !user) {
+        setMessage("You must be logged in to make a reservation.");
+        return;
+      }
+
+      const startISO = selected.start.toISOString();
+      const endISO = selected.end.toISOString();
+      const duration = machine.slotMinutes;
+      const eqName =
+        equipment.find((e) => e.id === machineId)?.name ?? machineId;
+
+      const { error } = await supabase.from("reservations").insert([
+        {
+          user_id: user.id, // uuid from auth
+          machine: eqName, // matches your 'machine' text column
+          start: startISO,
+          end: endISO,
+          duration, // int4
+          // you can add name/email later once you join profiles
+        },
+      ]);
+
+      if (error) {
+        console.error("Insert error:", error);
+        setMessage(`Failed to create reservation: ${error.message}`);
+        return;
+      }
+
+      const fmt = (d: Date) =>
+        d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+
+      setMessage(
+        `✅ Reserved ${eqName} on ${date} from ${fmt(selected.start)} to ${fmt(
+          selected.end
+        )}`
+      );
+      setSelected(null);
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -150,7 +214,7 @@ export default function ReserveForm({ equipment }: { equipment: Equip[] }) {
           boxShadow: "var(--shadow-soft)",
         }}
       >
-        RESERVE
+        {loading ? "Reserving…" : "RESERVE"}
       </button>
 
       {message && <p className="text-sm">{message}</p>}

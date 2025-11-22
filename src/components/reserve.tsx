@@ -4,14 +4,15 @@ import { Navbar } from "@/components/navbar";
 import { SiteFooter } from "@/components/site-footer";
 import ReserveForm from "@/components/reserve-form";
 
-export function Reserve() {
-  // temporary data; swap for DB later
-  const equipment = [
-    { id: "3dp", name: "3D Printer", slotMinutes: 60 },
-    { id: "laser", name: "Laser Cutter", slotMinutes: 30 },
-    { id: "solder", name: "Soldering Board", slotMinutes: 90 },
-  ];
+type Equipment = {
+  id: string;
+  name: string;
+  slotMinutes: number;
+  openTime: string;
+  closeTime: string;
+};
 
+export function Reserve({ equipment }: { equipment: Equipment[] }) {
   return (
     <div
       className="min-h-screen"
