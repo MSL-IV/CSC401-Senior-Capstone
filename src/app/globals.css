@@ -6,6 +6,9 @@
   --ada-heading-scale: 1;
   --ada-other-scale: 1;
   --ada-theme: light;
+  --ada-contrast: off;
+  --ada-animations: on;
+  --ada-highlight: off;
 }
 
 html {
@@ -72,6 +75,48 @@ body {
   --text-secondary: #cbd5e1;
   --icon: #e5e7eb;
   --shadow-soft: 0 18px 40px -20px rgba(0, 0, 0, 0.6);
+}
+
+[data-ada-contrast="on"] {
+  --background: #000000;
+  --surface: #0c0c0c;
+  --surface-muted: #0c0c0c;
+  --border: #ffffff;
+  --primary: #ff1744;
+  --primary-hover: #ff456b;
+  --on-primary: #ffffff;
+  --secondary: #ffffff;
+  --secondary-accent: #ffffff;
+  --accent: #ff1744;
+  --text-primary: #ffffff;
+  --text-secondary: #e0e0e0;
+  --icon: #ffffff;
+  --shadow-soft: 0 18px 40px -20px rgba(0, 0, 0, 0.85);
+}
+
+[data-ada-animations="off"] * {
+  animation: none !important;
+  transition: none !important;
+  scroll-behavior: auto !important;
+}
+
+[data-ada-highlight="on"] a,
+[data-ada-highlight="on"] a:visited {
+  position: relative;
+  outline: 3px solid var(--primary);
+  outline-offset: 3px;
+  text-decoration: underline !important;
+  text-decoration-color: var(--primary);
+  text-decoration-thickness: 0.18em;
+  text-underline-offset: 0.2em;
+  color: var(--text-primary) !important;
+  border-radius: 4px;
+}
+
+[data-ada-highlight="on"] a:hover,
+[data-ada-highlight="on"] a:focus-visible {
+  outline-color: var(--primary-hover);
+  text-decoration-color: var(--primary-hover);
 }
 
 @theme inline {

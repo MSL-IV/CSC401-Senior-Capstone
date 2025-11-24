@@ -8,6 +8,9 @@ const MAX_SCALE = 1.7;
 const STEP = 0.05;
 type Scale = number;
 const THEME_KEY = "ada-theme";
+const CONTRAST_KEY = "ada-contrast";
+const ANIM_KEY = "ada-animations";
+const HIGHLIGHT_KEY = "ada-highlight";
 
 function clampScale(value: number): Scale {
   return Math.min(MAX_SCALE, Math.max(MIN_SCALE, Number(value.toFixed(2))));
@@ -19,6 +22,10 @@ export default function AdaControls() {
   const [headingScale, setHeadingScale] = useState<Scale>(1);
   const [otherScale, setOtherScale] = useState<Scale>(1);
   const [darkMode, setDarkMode] = useState(false);
+  const [highContrast, setHighContrast] = useState(false);
+  const [animationsOff, setAnimationsOff] = useState(false);
+  const [highlightLinks, setHighlightLinks] = useState(false);
+  const [showTextDetails, setShowTextDetails] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   // Load saved values once
@@ -36,6 +43,18 @@ export default function AdaControls() {
     if (storedTheme === "dark") {
       setDarkMode(true);
     }
+    const storedContrast = window.localStorage.getItem(CONTRAST_KEY);
+    if (storedContrast === "on") {
+      setHighContrast(true);
+    }
+    const storedAnim = window.localStorage.getItem(ANIM_KEY);
+    if (storedAnim === "off") {
+      setAnimationsOff(true);
+    }
+    const storedHighlight = window.localStorage.getItem(HIGHLIGHT_KEY);
+    if (storedHighlight === "on") {
+      setHighlightLinks(true);
+    }
   }, []);
 
   // Apply to CSS variables and persist
@@ -49,7 +68,53 @@ export default function AdaControls() {
     window.localStorage.setItem("ada-font-other", String(otherScale));
     root.setAttribute("data-ada-theme", darkMode ? "dark" : "light");
     window.localStorage.setItem(THEME_KEY, darkMode ? "dark" : "light");
-  }, [bodyScale, headingScale, otherScale, darkMode]);
+    if (highContrast) {
+      root.setAttribute("data-ada-contrast", "on");
+      window.localStorage.setItem(CONTRAST_KEY, "on");
+    } else {
+      root.removeAttribute("data-ada-contrast");
+      window.localStorage.setItem(CONTRAST_KEY, "off");
+    }
+    if (animationsOff) {
+      root.setAttribute("data-ada-animations", "off");
+      window.localStorage.setItem(ANIM_KEY, "off");
+    } else {
+      root.removeAttribute("data-ada-animations");
+      window.localStorage.setItem(ANIM_KEY, "on");
+    }
+    if (highlightLinks) {
+      root.setAttribute("data-ada-highlight", "on");
+      window.localStorage.setItem(HIGHLIGHT_KEY, "on");
+    } else {
+      root.removeAttribute("data-ada-highlight");
+      window.localStorage.setItem(HIGHLIGHT_KEY, "off");
+    }
+  }, [
+    bodyScale,
+    headingScale,
+    otherScale,
+    darkMode,
+    highContrast,
+    animationsOff,
+    highlightLinks,
+  ]);
+
+  const resetAll = () => {
+    setBodyScale(1);
+    setHeadingScale(1);
+    setOtherScale(1);
+    setDarkMode(false);
+    setHighContrast(false);
+    setAnimationsOff(false);
+    setHighlightLinks(false);
+    window.localStorage.removeItem(THEME_KEY);
+    window.localStorage.removeItem(CONTRAST_KEY);
+    window.localStorage.removeItem(ANIM_KEY);
+    window.localStorage.removeItem(HIGHLIGHT_KEY);
+    window.localStorage.removeItem("ada-font-body");
+    window.localStorage.removeItem("ada-font-heading");
+    window.localStorage.removeItem("ada-font-other");
+  };
 
   // Close on outside click
   useEffect(() => {
@@ -110,14 +175,10 @@ export default function AdaControls() {
             <p className="font-semibold text-gray-800">Font size</p>
             <button
               type="button"
-              onClick={() => {
-                setBodyScale(1);
-                setHeadingScale(1);
-                setOtherScale(1);
-              }}
+              onClick={resetAll}
               className="text-xs text-blue-600 hover:underline"
             >
-              Reset
+              Reset all
             </button>
           </div>
 
@@ -135,6 +196,54 @@ export default function AdaControls() {
                 aria-label="Toggle dark mode"
               >
                 {darkMode ? "Dark on" : "Dark off"}
+              </button>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-medium text-gray-800">High contrast</p>
+                <p className="text-xs text-gray-500">Stronger text/background</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setHighContrast((v) => !v)}
+                className="rounded border border-gray-300 px-3 py-1 hover:bg-gray-50"
+                aria-pressed={highContrast}
+                aria-label="Toggle high contrast mode"
+              >
+                {highContrast ? "Contrast on" : "Contrast off"}
+              </button>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-medium text-gray-800">Animations</p>
+                <p className="text-xs text-gray-500">Pause page motion</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAnimationsOff((v) => !v)}
+                className="rounded border border-gray-300 px-3 py-1 hover:bg-gray-50"
+                aria-pressed={animationsOff}
+                aria-label="Toggle animations"
+              >
+                {animationsOff ? "Paused" : "On"}
+              </button>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-medium text-gray-800">Highlight links</p>
+                <p className="text-xs text-gray-500">Underline + outline links</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setHighlightLinks((v) => !v)}
+                className="rounded border border-gray-300 px-3 py-1 hover:bg-gray-50"
+                aria-pressed={highlightLinks}
+                aria-label="Toggle link highlight"
+              >
+                {highlightLinks ? "Highlight on" : "Highlight off"}
               </button>
             </div>
 
@@ -163,80 +272,94 @@ export default function AdaControls() {
               </div>
             </div>
 
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="font-medium text-gray-800">Headings</p>
-                <p className="text-xs text-gray-500">{headingScale.toFixed(2)}x</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => adjust("heading", -1)}
-                  className="rounded border border-gray-300 px-2 py-1 hover:bg-gray-50"
-                  aria-label="Decrease heading font size"
-                >
-                  A-
-                </button>
-                <button
-                  type="button"
-                  onClick={() => adjust("heading", 1)}
-                  className="rounded border border-gray-300 px-2 py-1 hover:bg-gray-50"
-                  aria-label="Increase heading font size"
-                >
-                  A+
-                </button>
-              </div>
-            </div>
+            <button
+              type="button"
+              onClick={() => setShowTextDetails((v) => !v)}
+              className="mt-1 text-left text-xs font-semibold text-blue-600 hover:underline"
+              aria-expanded={showTextDetails}
+            >
+              {showTextDetails ? "Hide individual text controls" : "Show individual text controls"}
+            </button>
 
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="font-medium text-gray-800">Body</p>
-                <p className="text-xs text-gray-500">{bodyScale.toFixed(2)}x</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => adjust("body", -1)}
-                  className="rounded border border-gray-300 px-2 py-1 hover:bg-gray-50"
-                  aria-label="Decrease body font size"
-                >
-                  A-
-                </button>
-                <button
-                  type="button"
-                  onClick={() => adjust("body", 1)}
-                  className="rounded border border-gray-300 px-2 py-1 hover:bg-gray-50"
-                  aria-label="Increase body font size"
-                >
-                  A+
-                </button>
-              </div>
-            </div>
+            {showTextDetails ? (
+              <>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-medium text-gray-800">Headings</p>
+                    <p className="text-xs text-gray-500">{headingScale.toFixed(2)}x</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => adjust("heading", -1)}
+                      className="rounded border border-gray-300 px-2 py-1 hover:bg-gray-50"
+                      aria-label="Decrease heading font size"
+                    >
+                      A-
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => adjust("heading", 1)}
+                      className="rounded border border-gray-300 px-2 py-1 hover:bg-gray-50"
+                      aria-label="Increase heading font size"
+                    >
+                      A+
+                    </button>
+                  </div>
+                </div>
 
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="font-medium text-gray-800">Labels & other</p>
-                <p className="text-xs text-gray-500">{otherScale.toFixed(2)}x</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => adjust("other", -1)}
-                  className="rounded border border-gray-300 px-2 py-1 hover:bg-gray-50"
-                  aria-label="Decrease other font size"
-                >
-                  A-
-                </button>
-                <button
-                  type="button"
-                  onClick={() => adjust("other", 1)}
-                  className="rounded border border-gray-300 px-2 py-1 hover:bg-gray-50"
-                  aria-label="Increase other font size"
-                >
-                  A+
-                </button>
-              </div>
-            </div>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-medium text-gray-800">Body</p>
+                    <p className="text-xs text-gray-500">{bodyScale.toFixed(2)}x</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => adjust("body", -1)}
+                      className="rounded border border-gray-300 px-2 py-1 hover:bg-gray-50"
+                      aria-label="Decrease body font size"
+                    >
+                      A-
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => adjust("body", 1)}
+                      className="rounded border border-gray-300 px-2 py-1 hover:bg-gray-50"
+                      aria-label="Increase body font size"
+                    >
+                      A+
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-medium text-gray-800">Labels & other</p>
+                    <p className="text-xs text-gray-500">{otherScale.toFixed(2)}x</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => adjust("other", -1)}
+                      className="rounded border border-gray-300 px-2 py-1 hover:bg-gray-50"
+                      aria-label="Decrease other font size"
+                    >
+                      A-
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => adjust("other", 1)}
+                      className="rounded border border-gray-300 px-2 py-1 hover:bg-gray-50"
+                      aria-label="Increase other font size"
+                    >
+                      A+
+                    </button>
+                  </div>
+                </div>
+              </>
+            ) : null}
+
           </section>
         </div>
       ) : null}
