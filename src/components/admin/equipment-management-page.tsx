@@ -1,125 +1,196 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { createClient } from "@/utils/supabase/client";
 
-type EquipmentStatus = "available" | "unavailable";
+type EquipmentStatus = "available" | "unavailable" | "maintenance";
 
 type EquipmentItem = {
   id: string;
   name: string;
-  type: string;
-
-  status: EquipmentStatus;
-  hoursUsedThisWeek: number;
-  maintenanceNote?: string;
+  description?: string;
+  location?: string;
+  slot_minutes: number;
+  open_time?: string;
+  close_time?: string;
+  active: boolean;
+  created_at?: string;
 };
 
 type ActiveReservation = {
-  id: string;
-  equipmentName: string;
-  userName: string;
-  userEmail: string;
-  startedAt: string;
-  expectedEnd: string;
-  status: "on-time" | "overdue";
+  reservation_id: number;
+  created_at: string;
+  name: string;
+  email: string;
+  start: string;
+  duration: number;
+  machine: string;
+  end: string;
+  user_id: string;
 };
 
-const defaultEquipment: EquipmentItem[] = [
-  {
-    id: "eq-001",
-    name: "Formlabs 3L",
-    type: "3D Printer",
-    status: "available",
-    hoursUsedThisWeek: 18,
-  },
-  {
-    id: "eq-002",
-    name: "Universal Laser Systems",
-    type: "Laser Cutter",
-    status: "unavailable",
-    hoursUsedThisWeek: 24,
-    maintenanceNote: "Replacing exhaust filters",
-  },
-  {
-    id: "eq-003",
-    name: "FlashForge Creator 4",
-    type: "3D Printer",
-    status: "available",
-    hoursUsedThisWeek: 12,
-  },
-  {
-    id: "eq-004",
-    name: "Roland MDX-50",
-    type: "CNC Mill",
-    status: "unavailable",
-    hoursUsedThisWeek: 9,
-    maintenanceNote: "Awaiting safety inspection",
-  },
-  {
-    id: "eq-005",
-    name: "Epilog Fusion Edge",
-    type: "Laser Cutter",
-    status: "available",
-    hoursUsedThisWeek: 20,
-  },
-];
-
-const defaultReservations: ActiveReservation[] = [
-  {
-    id: "res-001",
-    equipmentName: "Formlabs 3L",
-    userName: "Ryan Mitchell",
-    userEmail: "ryan.mitchell@ut.edu",
-    startedAt: "Today • 10:15 AM",
-    expectedEnd: "12:45 PM",
-    status: "on-time",
-  },
-  {
-    id: "res-002",
-    equipmentName: "Universal Laser Systems",
-    userName: "Sofia Gutierrez",
-    userEmail: "sofia.gutierrez@ut.edu",
-    startedAt: "Today • 09:30 AM",
-    expectedEnd: "11:00 AM",
-    status: "overdue",
-  },
-  {
-    id: "res-003",
-    equipmentName: "Roland MDX-50",
-    userName: "Kevin Zhou",
-    userEmail: "kzhou@ut.edu",
-    startedAt: "Today • 08:00 AM",
-    expectedEnd: "01:00 PM",
-    status: "on-time",
-  },
-];
+// Create Supabase client
+const supabase = createClient();
 
 export function EquipmentManagementPage() {
-  const [equipment, setEquipment] = useState(defaultEquipment);
-  const [reservations] = useState(defaultReservations);
+  const [equipment, setEquipment] = useState<EquipmentItem[]>([]);
+  const [reservations, setReservations] = useState<ActiveReservation[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [updateLoading, setUpdateLoading] = useState<string | null>(null);
+
+  // Fetch equipment data
+  async function fetchEquipment() {
+    try {
+      const { data, error } = await supabase
+        .from('machines')
+        .select('*')
+        .order('name');
+
+      if (error) {
+        setError('Failed to fetch machines: ' + error.message);
+        return;
+      }
+
+      setEquipment(data || []);
+    } catch (err) {
+      setError('An unexpected error occurred while fetching machines');
+      console.error('Machines fetch error:', err);
+    }
+  }
+
+  // Fetch active reservations
+  async function fetchReservations() {
+    try {
+      const { data, error } = await supabase
+        .from('reservations')
+        .select('*')
+        .order('start');
+
+      if (error) {
+        setError('Failed to fetch reservations: ' + error.message);
+        return;
+      }
+
+      // Filter for current/active reservations
+      const now = new Date();
+      const activeReservations = (data || []).filter(res => {
+        const startTime = new Date(res.start);
+        const endTime = new Date(res.end);
+        return startTime <= now && endTime >= now;
+      });
+
+      setReservations(activeReservations);
+    } catch (err) {
+      setError('An unexpected error occurred while fetching reservations');
+      console.error('Reservations fetch error:', err);
+    }
+  }
+
+  // Load data on component mount
+  useEffect(() => {
+    async function loadData() {
+      setLoading(true);
+      await Promise.all([
+        fetchEquipment(),
+        fetchReservations()
+      ]);
+      setLoading(false);
+    }
+    
+    loadData();
+  }, []);
 
   const summary = useMemo(() => {
     const total = equipment.length;
-    const available = equipment.filter((item) => item.status === "available").length;
+    const available = equipment.filter((item) => item.active === true).length;
+    const inUse = reservations.length; // All fetched reservations are active
     return {
       total,
       available,
       unavailable: total - available,
+      inUse,
     };
-  }, [equipment]);
+  }, [equipment, reservations]);
 
-  const toggleEquipmentStatus = (id: string) => {
-    setEquipment((prev) =>
-      prev.map((item) =>
-        item.id === id
-          ? {
-              ...item,
-              status: item.status === "available" ? "unavailable" : "available",
-            }
-          : item,
-      ),
-    );
+  const toggleEquipmentStatus = async (id: string) => {
+    setUpdateLoading(id);
+    try {
+      const item = equipment.find(eq => eq.id === id);
+      if (!item) return;
+
+      const newActive = !item.active;
+      
+      const { error } = await supabase
+        .from('machines')
+        .update({ active: newActive })
+        .eq('id', id);
+
+      if (error) {
+        setError('Failed to update machine status: ' + error.message);
+        return;
+      }
+
+      // Update local state
+      setEquipment(prev => 
+        prev.map(item => 
+          item.id === id ? { ...item, active: newActive } : item
+        )
+      );
+    } catch (err) {
+      setError('An unexpected error occurred while updating machine');
+      console.error('Machine update error:', err);
+    } finally {
+      setUpdateLoading(null);
+    }
   };
+
+  const formatTime = (timeString: string) => {
+    const date = new Date(timeString);
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const timeDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    
+    const timeFormatted = date.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    });
+
+    if (timeDate.getTime() === today.getTime()) {
+      return `Today • ${timeFormatted}`;
+    } else {
+      return `${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} • ${timeFormatted}`;
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[var(--primary)] mx-auto mb-4"></div>
+          <p>Loading equipment data...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center max-w-md">
+          <div className="text-red-500 mb-4 text-2xl">⚠️ Error</div>
+          <p className="mb-4">{error}</p>
+          <button 
+            onClick={() => window.location.reload()} 
+            className="px-4 py-2 bg-[var(--primary)] text-white rounded-lg hover:opacity-90 transition"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -218,9 +289,9 @@ export function EquipmentManagementPage() {
             <table className="min-w-full divide-y divide-[var(--border)]">
               <thead className="text-left text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)]">
                 <tr>
-                  <th className="py-3 pr-4">Equipment</th>
-                  <th className="px-4 py-3">Type</th>
-                  <th className="px-4 py-3">Usage</th>
+                  <th className="py-3 pr-4">Machine</th>
+                  <th className="px-4 py-3">Location</th>
+                  <th className="px-4 py-3">Slot Duration</th>
                   <th className="px-4 py-3">Status</th>
                   <th className="px-4 py-3 text-right">Toggle</th>
                 </tr>
@@ -230,34 +301,34 @@ export function EquipmentManagementPage() {
                   <tr key={item.id} className="text-sm">
                     <td className="py-4 pr-4">
                       <p className="font-semibold">{item.name}</p>
-                      {item.maintenanceNote && (
-                        <p className="text-xs text-rose-600">
-                          {item.maintenanceNote}
+                      {item.description && (
+                        <p className="text-xs text-[var(--text-secondary)]">
+                          {item.description}
                         </p>
                       )}
                     </td>
                     <td className="px-4 py-4 text-[var(--text-secondary)]">
-                      {item.type}
+                      {item.location || 'Not specified'}
                     </td>
                     <td className="px-4 py-4 text-[var(--text-secondary)]">
-                      {item.hoursUsedThisWeek} hrs this week
+                      {item.slot_minutes} min slots
                     </td>
                     <td className="px-4 py-4">
                       <span
                         className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold ${
-                          item.status === "available"
+                          item.active
                             ? "bg-emerald-50 text-emerald-700"
                             : "bg-rose-50 text-rose-700"
                         }`}
                       >
                         <span
                           className={`h-2 w-2 rounded-full ${
-                            item.status === "available"
+                            item.active
                               ? "bg-emerald-500"
                               : "bg-rose-500"
                           }`}
                         />
-                        {item.status === "available" ? "Available" : "Unavailable"}
+                        {item.active ? "Available" : "Unavailable"}
                       </span>
                     </td>
                     <td className="px-4 py-4 text-right">
@@ -265,12 +336,13 @@ export function EquipmentManagementPage() {
                         type="button"
                         onClick={() => toggleEquipmentStatus(item.id)}
                         className={`rounded-[var(--radius-button)] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white transition ${
-                          item.status === "available"
+                          item.active
                             ? "bg-rose-500 hover:bg-rose-600"
                             : "bg-emerald-600 hover:bg-emerald-700"
-                        }`}
+                        } ${updateLoading === item.id ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        disabled={updateLoading === item.id}
                       >
-                        {item.status === "available" ? "Mark Offline" : "Mark Online"}
+                        {updateLoading === item.id ? 'Updating...' : (item.active ? "Mark Offline" : "Mark Online")}
                       </button>
                     </td>
                   </tr>
@@ -307,29 +379,29 @@ export function EquipmentManagementPage() {
           <div className="grid gap-4 md:grid-cols-3">
             {reservations.map((reservation) => (
               <article
-                key={reservation.id}
+                key={reservation.reservation_id}
                 className="rounded-2xl border border-[var(--border)] p-4"
               >
                 <p className="text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)]">
-                  {reservation.equipmentName}
+                  {reservation.machine}
                 </p>
                 <p className="mt-2 font-heading text-lg font-semibold text-[var(--text-primary)]">
-                  {reservation.userName}
+                  {reservation.name}
                 </p>
                 <p className="text-sm text-[var(--text-secondary)]">
-                  {reservation.userEmail}
+                  {reservation.email}
                 </p>
                 <dl className="mt-4 space-y-2 text-sm text-[var(--text-secondary)]">
                   <div className="flex items-center justify-between">
                     <dt>Started</dt>
                     <dd className="font-semibold text-[var(--text-primary)]">
-                      {reservation.startedAt}
+                      {formatTime(reservation.start)}
                     </dd>
                   </div>
                   <div className="flex items-center justify-between">
                     <dt>Expected End</dt>
                     <dd className="font-semibold text-[var(--text-primary)]">
-                      {reservation.expectedEnd}
+                      {formatTime(reservation.end)}
                     </dd>
                   </div>
                   <div className="flex items-center justify-between">
@@ -337,19 +409,19 @@ export function EquipmentManagementPage() {
                     <dd>
                       <span
                         className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold ${
-                          reservation.status === "on-time"
+                          new Date(reservation.end) >= new Date()
                             ? "bg-emerald-50 text-emerald-700"
                             : "bg-amber-50 text-amber-700"
                         }`}
                       >
                         <span
                           className={`h-2 w-2 rounded-full ${
-                            reservation.status === "on-time"
+                            new Date(reservation.end) >= new Date()
                               ? "bg-emerald-500"
                               : "bg-amber-500"
                           }`}
                         />
-                        {reservation.status === "on-time" ? "On schedule" : "Overdue"}
+                        {new Date(reservation.end) >= new Date() ? "On schedule" : "Overdue"}
                       </span>
                     </dd>
                   </div>

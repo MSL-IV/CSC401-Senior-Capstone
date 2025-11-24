@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { createClient } from "@/utils/supabase/client";
 
 type UserStatus = "active" | "pending" | "suspended";
 type UserRole = "student" | "faculty" | "admin";
@@ -16,68 +17,19 @@ type UserRecord = {
   trainingsCompleted: number;
 };
 
-const mockUsers: UserRecord[] = [
-  {
-    id: "u-001",
-    name: "Maya Patel",
-    email: "maya.patel@ut.edu",
-    role: "student",
-    status: "active",
-    joinedDate: "Jan 12, 2024",
-    lastActive: "2 hrs ago",
-    trainingsCompleted: 4,
-  },
-  {
-    id: "u-002",
-    name: "Jordan Evans",
-    email: "jordan.evans@ut.edu",
-    role: "student",
-    status: "pending",
-    joinedDate: "Jan 26, 2024",
-    lastActive: "Awaiting training",
-    trainingsCompleted: 1,
-  },
-  {
-    id: "u-003",
-    name: "Elena Ruiz",
-    email: "elena.ruiz@ut.edu",
-    role: "faculty",
-    status: "active",
-    joinedDate: "Dec 05, 2023",
-    lastActive: "Yesterday",
-    trainingsCompleted: 6,
-  },
-  {
-    id: "u-004",
-    name: "Noah Davis",
-    email: "noah.davis@ut.edu",
-    role: "admin",
-    status: "suspended",
-    joinedDate: "Nov 18, 2023",
-    lastActive: "Feb 04, 2024",
-    trainingsCompleted: 2,
-  },
-  {
-    id: "u-005",
-    name: "Grace Huang",
-    email: "grace.huang@ut.edu",
-    role: "student",
-    status: "active",
-    joinedDate: "Feb 02, 2024",
-    lastActive: "45 mins ago",
-    trainingsCompleted: 3,
-  },
-  {
-    id: "u-006",
-    name: "Professor Reed",
-    email: "l.reed@ut.edu",
-    role: "faculty",
-    status: "pending",
-    joinedDate: "Jan 30, 2024",
-    lastActive: "Awaiting training",
-    trainingsCompleted: 0,
-  },
-];
+type DatabaseUser = {
+  id: string;
+  first_name: string | null;
+  last_name: string | null;
+  email: string;
+  role: UserRole;
+  status: UserStatus;
+  created_at: string;
+  updated_at: string;
+  student_id: string | null;
+};
+
+const supabase = createClient();
 
 const statusStyles: Record<
   UserStatus,
@@ -110,12 +62,126 @@ const roleLabels: Record<UserRole, string> = {
 };
 
 export function ViewUsersPage() {
+  const [users, setUsers] = useState<UserRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [updateLoading, setUpdateLoading] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | UserStatus>("all");
   const [roleFilter, setRoleFilter] = useState<"all" | UserRole>("all");
+  const [managingUserId, setManagingUserId] = useState<string | null>(null);
+
+  // Fetch users from database
+  async function fetchUsers() {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        setError('Failed to fetch users: ' + error.message);
+        return;
+      }
+
+      // Transform database users to display format
+      const transformedUsers: UserRecord[] = (data || []).map((dbUser: DatabaseUser) => {
+        const fullName = [dbUser.first_name, dbUser.last_name].filter(Boolean).join(' ') || 'No Name';
+        
+        return {
+          id: dbUser.id,
+          name: fullName,
+          email: dbUser.email || 'No Email',
+          role: dbUser.role || 'student',
+          status: dbUser.status || 'pending',
+          joinedDate: new Date(dbUser.created_at).toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric'
+          }),
+          lastActive: new Date(dbUser.updated_at).toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric'
+          }),
+          trainingsCompleted: 0 // TODO: Calculate from training records when implemented
+        };
+      });
+
+      setUsers(transformedUsers);
+    } catch (err) {
+      setError('An unexpected error occurred while fetching users');
+      console.error('Users fetch error:', err);
+    }
+  }
+
+  // Update user in database
+  async function updateUser(userId: string, updates: Partial<{ role: UserRole; status: UserStatus }>) {
+    setUpdateLoading(userId);
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update(updates)
+        .eq('id', userId);
+
+      if (error) {
+        setError('Failed to update user: ' + error.message);
+        return false;
+      }
+
+      // Update local state
+      setUsers(prev => 
+        prev.map(user => 
+          user.id === userId 
+            ? { ...user, ...updates }
+            : user
+        )
+      );
+      
+      return true;
+    } catch (err) {
+      setError('An unexpected error occurred while updating user');
+      console.error('User update error:', err);
+      return false;
+    } finally {
+      setUpdateLoading(null);
+    }
+  }
+
+  // Load users on component mount
+  useEffect(() => {
+    async function loadUsers() {
+      setLoading(true);
+      await fetchUsers();
+      setLoading(false);
+    }
+    
+    loadUsers();
+  }, []);
+
+  const handleSuspendUser = async (userId: string) => {
+    const success = await updateUser(userId, { status: "suspended" });
+    if (success) {
+      setManagingUserId(null);
+    }
+  };
+
+  const handleActivateUser = async (userId: string) => {
+    const success = await updateUser(userId, { status: "active" });
+    if (success) {
+      setManagingUserId(null);
+    }
+  };
+
+  const handleChangeRole = async (userId: string, newRole: UserRole) => {
+    const success = await updateUser(userId, { role: newRole });
+    if (success) {
+      setManagingUserId(null);
+    }
+  };
 
   const filteredUsers = useMemo(() => {
-    return mockUsers.filter((user) => {
+    return users.filter((user: UserRecord) => {
       const matchesSearch =
         user.name.toLowerCase().includes(search.toLowerCase()) ||
         user.email.toLowerCase().includes(search.toLowerCase());
@@ -126,20 +192,20 @@ export function ViewUsersPage() {
 
       return matchesSearch && matchesStatus && matchesRole;
     });
-  }, [search, statusFilter, roleFilter]);
+  }, [search, statusFilter, roleFilter, users]);
 
   const stats = useMemo(() => {
     const totals = {
-      active: mockUsers.filter((user) => user.status === "active").length,
-      pending: mockUsers.filter((user) => user.status === "pending").length,
-      suspended: mockUsers.filter((user) => user.status === "suspended").length,
+      active: users.filter((user) => user.status === "active").length,
+      pending: users.filter((user) => user.status === "pending").length,
+      suspended: users.filter((user) => user.status === "suspended").length,
     };
 
     return [
       {
         title: "Total Users",
-        value: mockUsers.length,
-        change: "+6 this month",
+        value: users.length,
+        change: `${users.length} registered`,
       },
       {
         title: "Active & Trained",
@@ -160,7 +226,38 @@ export function ViewUsersPage() {
         accent: "text-rose-600",
       },
     ];
-  }, []);
+  }, [users]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[var(--primary)] mx-auto mb-4"></div>
+          <p>Loading users...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center max-w-md">
+          <div className="text-red-500 mb-4 text-2xl">⚠️ Error</div>
+          <p className="mb-4">{error}</p>
+          <button 
+            onClick={() => {
+              setError(null);
+              fetchUsers();
+            }} 
+            className="px-4 py-2 bg-[var(--primary)] text-white rounded-lg hover:opacity-90 transition"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -290,7 +387,7 @@ export function ViewUsersPage() {
 
           <div className="rounded-2xl bg-[var(--surface-muted)] px-4 py-3 text-sm text-[var(--text-secondary)]">
             Showing <span className="font-semibold">{filteredUsers.length}</span>{" "}
-            of <span className="font-semibold">{mockUsers.length}</span> users
+            of <span className="font-semibold">{users.length}</span> users
             based on current filters.
           </div>
 
@@ -345,9 +442,11 @@ export function ViewUsersPage() {
                     <td className="px-4 py-4 text-right">
                       <button
                         type="button"
-                        className="rounded-full border border-[var(--border)] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)] transition hover:border-[var(--secondary)] hover:text-[var(--text-primary)]"
+                        onClick={() => setManagingUserId(user.id)}
+                        disabled={updateLoading === user.id}
+                        className={`rounded-full border border-[var(--border)] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)] transition hover:border-[var(--secondary)] hover:text-[var(--text-primary)] ${updateLoading === user.id ? 'opacity-50 cursor-not-allowed' : ''}`}
                       >
-                        Manage
+                        {updateLoading === user.id ? 'Updating...' : 'Manage'}
                       </button>
                     </td>
                   </tr>
@@ -363,6 +462,83 @@ export function ViewUsersPage() {
           </div>
         </section>
       </div>
+
+      {/* Management Modal */}
+      {managingUserId && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
+            {(() => {
+              const user = users.find(u => u.id === managingUserId);
+              if (!user) return null;
+
+              return (
+                <>
+                  <h3 className="text-lg font-semibold mb-4">
+                    Manage {user.name}
+                  </h3>
+                  <div className="space-y-4">
+                    <div>
+                      <p className="text-sm text-gray-600 mb-2">Status</p>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleActivateUser(user.id)}
+                          disabled={updateLoading === user.id}
+                          className="px-3 py-2 text-sm bg-emerald-100 text-emerald-700 rounded hover:bg-emerald-200 disabled:opacity-50"
+                        >
+                          Activate
+                        </button>
+                        <button
+                          onClick={() => handleSuspendUser(user.id)}
+                          disabled={updateLoading === user.id}
+                          className="px-3 py-2 text-sm bg-red-100 text-red-700 rounded hover:bg-red-200 disabled:opacity-50"
+                        >
+                          Suspend
+                        </button>
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <p className="text-sm text-gray-600 mb-2">Role</p>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleChangeRole(user.id, 'student')}
+                          disabled={updateLoading === user.id}
+                          className="px-3 py-2 text-sm bg-blue-100 text-blue-700 rounded hover:bg-blue-200 disabled:opacity-50"
+                        >
+                          Student
+                        </button>
+                        <button
+                          onClick={() => handleChangeRole(user.id, 'faculty')}
+                          disabled={updateLoading === user.id}
+                          className="px-3 py-2 text-sm bg-purple-100 text-purple-700 rounded hover:bg-purple-200 disabled:opacity-50"
+                        >
+                          Faculty
+                        </button>
+                        <button
+                          onClick={() => handleChangeRole(user.id, 'admin')}
+                          disabled={updateLoading === user.id}
+                          className="px-3 py-2 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200 disabled:opacity-50"
+                        >
+                          Admin
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end gap-2 pt-4 border-t">
+                      <button
+                        onClick={() => setManagingUserId(null)}
+                        className="px-4 py-2 text-sm border border-gray-300 rounded hover:bg-gray-50"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

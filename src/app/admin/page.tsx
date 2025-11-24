@@ -1,13 +1,26 @@
 import Link from "next/link";
 import { adminLinks } from "@/data/admin-links";
+import { createClient } from "@/utils/supabase/server";
 
-const highlights = [
-  { label: "Open Approvals", value: "3", tone: "text-amber-700 bg-amber-50" },
-  { label: "Items Offline", value: "2", tone: "text-rose-700 bg-rose-50" },
-  { label: "Active Users", value: "18", tone: "text-emerald-700 bg-emerald-50" },
-];
+export default async function AdminDashboardPage() {
+  const supabase = await createClient();
 
-export default function AdminDashboardPage() {
+  // Fetch real statistics
+  const [machinesResponse, usersResponse, reservationsResponse] = await Promise.all([
+    supabase.from("machines").select("active"),
+    supabase.from("profiles").select("status"),
+    supabase.from("reservations").select("start, end").gte('end', new Date().toISOString())
+  ]);
+
+  const machinesOffline = machinesResponse.data?.filter(m => !m.active).length || 0;
+  const pendingUsers = usersResponse.data?.filter(u => u.status === 'pending').length || 0;
+  const activeUsers = usersResponse.data?.filter(u => u.status === 'active').length || 0;
+
+  const highlights = [
+    { label: "Pending Users", value: pendingUsers.toString(), tone: "text-amber-700 bg-amber-50" },
+    { label: "Items Offline", value: machinesOffline.toString(), tone: "text-rose-700 bg-rose-50" },
+    { label: "Active Users", value: activeUsers.toString(), tone: "text-emerald-700 bg-emerald-50" },
+  ];
   return (
     <div className="space-y-8">
       <section
