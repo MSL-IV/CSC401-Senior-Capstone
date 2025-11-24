@@ -7,6 +7,7 @@ const MIN_SCALE = 0.8;
 const MAX_SCALE = 1.7;
 const STEP = 0.05;
 type Scale = number;
+const THEME_KEY = "ada-theme";
 
 function clampScale(value: number): Scale {
   return Math.min(MAX_SCALE, Math.max(MIN_SCALE, Number(value.toFixed(2))));
@@ -17,6 +18,7 @@ export default function AdaControls() {
   const [bodyScale, setBodyScale] = useState<Scale>(1);
   const [headingScale, setHeadingScale] = useState<Scale>(1);
   const [otherScale, setOtherScale] = useState<Scale>(1);
+  const [darkMode, setDarkMode] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   // Load saved values once
@@ -29,6 +31,11 @@ export default function AdaControls() {
     setBodyScale(load("ada-font-body", 1));
     setHeadingScale(load("ada-font-heading", 1));
     setOtherScale(load("ada-font-other", 1));
+
+    const storedTheme = window.localStorage.getItem(THEME_KEY);
+    if (storedTheme === "dark") {
+      setDarkMode(true);
+    }
   }, []);
 
   // Apply to CSS variables and persist
@@ -40,7 +47,9 @@ export default function AdaControls() {
     window.localStorage.setItem("ada-font-body", String(bodyScale));
     window.localStorage.setItem("ada-font-heading", String(headingScale));
     window.localStorage.setItem("ada-font-other", String(otherScale));
-  }, [bodyScale, headingScale, otherScale]);
+    root.setAttribute("data-ada-theme", darkMode ? "dark" : "light");
+    window.localStorage.setItem(THEME_KEY, darkMode ? "dark" : "light");
+  }, [bodyScale, headingScale, otherScale, darkMode]);
 
   // Close on outside click
   useEffect(() => {
@@ -112,7 +121,23 @@ export default function AdaControls() {
             </button>
           </div>
 
-          <section className="space-y-2">
+          <section className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-medium text-gray-800">Theme</p>
+                <p className="text-xs text-gray-500">Toggle dark mode</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDarkMode((v) => !v)}
+                className="rounded border border-gray-300 px-3 py-1 hover:bg-gray-50"
+                aria-pressed={darkMode}
+                aria-label="Toggle dark mode"
+              >
+                {darkMode ? "Dark on" : "Dark off"}
+              </button>
+            </div>
+
             <div className="flex items-center justify-between">
               <div>
                 <p className="font-medium text-gray-800">All text</p>

@@ -181,7 +181,7 @@ export function Home() {
         className="mx-auto flex max-w-6xl flex-col items-center gap-16 px-6 py-20 text-center md:items-stretch md:text-left"
       >
         <section
-          className="overflow-hidden rounded-3xl border bg-white shadow-sm"
+          className="overflow-hidden rounded-3xl border shadow-sm bg-[var(--surface)] text-[var(--text-primary)]"
           style={{
             borderColor: "var(--border)",
             borderRadius: "var(--radius-card)",
@@ -213,7 +213,7 @@ export function Home() {
               }}
             />
           </div>
-          <div className="relative w-full overflow-hidden bg-white px-6 py-12 md:px-20">
+          <div className="relative w-full overflow-hidden px-6 py-12 md:px-20 bg-[var(--surface)] text-[var(--text-primary)]">
             <div
               className="flex w-full transition-transform duration-700 ease-in-out"
               style={{

@@ -24,7 +24,7 @@ export function Reserve({ equipment }: { equipment: Equipment[] }) {
       <Navbar />
       <main className="mx-auto flex max-w-6xl flex-col items-stretch gap-16 px-6 py-20">
         <section
-          className="overflow-hidden rounded-3xl border bg-white shadow-sm"
+          className="overflow-hidden rounded-3xl border shadow-sm bg-[var(--surface)] text-[var(--text-primary)]"
           style={{
             borderColor: "var(--border)",
             borderRadius: "var(--radius-card)",

@@ -166,7 +166,7 @@ export function About() {
 
                 {/* 1️⃣ ABOUT + GENERAL INFO */}
                 <section
-                    className="overflow-hidden rounded-3xl border bg-white shadow-sm"
+                    className="overflow-hidden rounded-3xl border shadow-sm bg-[var(--surface)] text-[var(--text-primary)]"
                     style={{
                         borderColor: "var(--border)",
                         borderRadius: "var(--radius-card)",
@@ -266,7 +266,7 @@ export function About() {
 
                 {/* 2️⃣ WHAT'S IN THE MAKERSPACE */}
                 <section
-                    className="overflow-hidden rounded-3xl border bg-white shadow-sm"
+                    className="overflow-hidden rounded-3xl border shadow-sm bg-[var(--surface)] text-[var(--text-primary)]"
                     style={{
                         borderColor: "var(--border)",
                         borderRadius: "var(--radius-card)",
@@ -296,7 +296,7 @@ export function About() {
 
                 {/* 3️⃣ FAQ */}
                 <section
-                    className="overflow-hidden rounded-3xl border bg-white shadow-sm"
+                    className="overflow-hidden rounded-3xl border shadow-sm bg-[var(--surface)] text-[var(--text-primary)]"
                     style={{
                         borderColor: "var(--border)",
                         borderRadius: "var(--radius-card)",
