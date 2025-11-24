@@ -147,7 +147,7 @@ export function EquipmentManagementPage() {
 
         <section className="grid gap-4 sm:grid-cols-3">
           <article
-            className="rounded-3xl border bg-white p-6 shadow-sm"
+            className="rounded-3xl border bg-[var(--surface)] p-6 shadow-sm"
             style={{
               borderColor: "var(--border)",
               boxShadow: "var(--shadow-soft)",
@@ -162,7 +162,7 @@ export function EquipmentManagementPage() {
             </p>
           </article>
           <article
-            className="rounded-3xl border bg-white p-6 shadow-sm"
+            className="rounded-3xl border bg-[var(--surface)] p-6 shadow-sm"
             style={{
               borderColor: "var(--border)",
               boxShadow: "var(--shadow-soft)",
@@ -177,7 +177,7 @@ export function EquipmentManagementPage() {
             </p>
           </article>
           <article
-            className="rounded-3xl border bg-white p-6 shadow-sm"
+            className="rounded-3xl border bg-[var(--surface)] p-6 shadow-sm"
             style={{
               borderColor: "var(--border)",
               boxShadow: "var(--shadow-soft)",
@@ -194,7 +194,7 @@ export function EquipmentManagementPage() {
         </section>
 
         <section
-          className="space-y-5 rounded-3xl border bg-white p-6 shadow-sm"
+          className="space-y-5 rounded-3xl border bg-[var(--surface)] p-6 shadow-sm"
           style={{
             borderColor: "var(--border)",
             boxShadow: "var(--shadow-soft)",
@@ -281,7 +281,7 @@ export function EquipmentManagementPage() {
         </section>
 
         <section
-          className="space-y-5 rounded-3xl border bg-white p-6 shadow-sm"
+          className="space-y-5 rounded-3xl border bg-[var(--surface)] p-6 shadow-sm"
           style={{
             borderColor: "var(--border)",
             boxShadow: "var(--shadow-soft)",

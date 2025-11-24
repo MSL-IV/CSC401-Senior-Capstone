@@ -192,7 +192,7 @@ export function ViewUsersPage() {
           {stats.map((stat) => (
             <article
               key={stat.title}
-              className="rounded-3xl border bg-white p-6 shadow-sm"
+              className="rounded-3xl border bg-[var(--surface)] p-6 shadow-sm"
               style={{
                 borderColor: "var(--border)",
                 boxShadow: "var(--shadow-soft)",
@@ -216,7 +216,7 @@ export function ViewUsersPage() {
         </section>
 
         <section
-          className="space-y-5 rounded-3xl border bg-white p-6 shadow-sm"
+          className="space-y-5 rounded-3xl border bg-[var(--surface)] p-6 shadow-sm"
           style={{
             borderColor: "var(--border)",
             boxShadow: "var(--shadow-soft)",
@@ -270,23 +270,21 @@ export function ViewUsersPage() {
                 )}
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              {(["all", "student", "faculty", "admin"] as const).map(
-                (role) => (
-                  <button
-                    key={role}
-                    type="button"
-                    onClick={() => setRoleFilter(role)}
-                    className={`rounded-[var(--radius-button)] px-3 py-2 text-xs font-semibold uppercase tracking-wide transition ${
-                      roleFilter === role
-                        ? "bg-[var(--primary)] text-white"
-                        : "border border-[var(--border)] text-[var(--text-secondary)] hover:border-[var(--primary)] hover:text-[var(--text-primary)]"
-                    }`}
-                  >
-                    {role === "all" ? "All Roles" : roleLabels[role]}
-                  </button>
-                ),
-              )}
+            <div className="flex flex-wrap items-center gap-2">
+              {(["all", "student", "faculty", "admin"] as const).map((role) => (
+                <button
+                  key={role}
+                  type="button"
+                  onClick={() => setRoleFilter(role)}
+                  className={`rounded-[var(--radius-button)] px-3 py-2 text-xs font-semibold uppercase tracking-wide transition ${
+                    roleFilter === role
+                      ? "bg-[var(--primary)] text-white"
+                      : "border border-[var(--border)] text-[var(--text-secondary)] hover:border-[var(--primary)] hover:text-[var(--text-primary)]"
+                  }`}
+                >
+                  {role === "all" ? "All Roles" : roleLabels[role]}
+                </button>
+              ))}
             </div>
           </div>
 

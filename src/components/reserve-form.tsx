@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createClient as createBrowserClient } from "@/utils/supabase/client";
 
 type Equip = {
@@ -11,6 +11,13 @@ type Equip = {
   closeTime: string;
 };
 type Slot = { start: Date; end: Date };
+
+type ReservationItem = {
+  id: string;
+  title: string;
+  date: string;
+  time: string;
+};
 
 function toISODate(d: Date) {
   const z = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
@@ -60,6 +67,10 @@ export default function ReserveForm({
   const [selected, setSelected] = useState<Slot | null>(null);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const [reservationsLoading, setReservationsLoading] = useState(true);
+  const [reservationsError, setReservationsError] = useState<string | null>(null);
+  const [reservations, setReservations] = useState<ReservationItem[]>([]);
+  const supabase = useMemo(() => createBrowserClient(), []);
 
   const slots = useMemo(() => {
     const step = machine?.slotMinutes ?? 30;
@@ -70,6 +81,74 @@ export default function ReserveForm({
 
   const now = new Date();
   const isPast = (s: Slot) => s.end < now && date === toISODate(now);
+
+  useEffect(() => {
+    let active = true;
+    const loadReservations = async () => {
+      setReservationsLoading(true);
+      setReservationsError(null);
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
+      if (userError || !user) {
+        setReservations([]);
+        setReservationsLoading(false);
+        setReservationsError(null);
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from("reservations")
+        .select("reservation_id, machine, start, end")
+        .eq("user_id", user.id)
+        .order("start", { ascending: false })
+        .limit(10);
+
+      if (!active) return;
+
+      if (error) {
+        setReservationsError("Unable to load reservations right now.");
+        setReservations([]);
+      } else {
+        const mapped =
+          data?.map((res) => {
+            const startDate = new Date(res.start as string);
+            const endDate = res.end ? new Date(res.end as string) : null;
+            const dateLabel = startDate.toLocaleDateString(undefined, {
+              month: "short",
+              day: "numeric",
+              year: "numeric",
+            });
+            const timeLabel = `${startDate.toLocaleTimeString([], {
+              hour: "numeric",
+              minute: "2-digit",
+            })}${
+              endDate
+                ? ` - ${endDate.toLocaleTimeString([], {
+                    hour: "numeric",
+                    minute: "2-digit",
+                  })}`
+                : ""
+            }`;
+            return {
+              id: String(res.reservation_id ?? res.start ?? crypto.randomUUID()),
+              title: res.machine ?? "Reservation",
+              date: dateLabel,
+              time: timeLabel,
+            } satisfies ReservationItem;
+          }) ?? [];
+        setReservations(mapped);
+      }
+      setReservationsLoading(false);
+    };
+
+    loadReservations();
+
+    return () => {
+      active = false;
+    };
+  }, [supabase]);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -82,13 +161,11 @@ export default function ReserveForm({
 
     setLoading(true);
     try {
-      const supabase = createBrowserClient();
-
-      // Get the logged-in user
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser();
+    // Get the logged-in user
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
 
       if (userError || !user) {
         setMessage("You must be logged in to make a reservation.");
@@ -101,16 +178,36 @@ export default function ReserveForm({
       const eqName =
         equipment.find((e) => e.id === machineId)?.name ?? machineId;
 
-      const { error } = await supabase.from("reservations").insert([
-        {
-          user_id: user.id, // uuid from auth
-          machine: eqName, // matches your 'machine' text column
-          start: startISO,
-          end: endISO,
-          duration, // int4
-          // you can add name/email later once you join profiles
-        },
-      ]);
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("first_name, last_name, email")
+        .eq("id", user.id)
+        .single();
+
+      const displayName =
+        profile?.first_name || profile?.last_name
+          ? `${profile?.first_name ?? ""} ${profile?.last_name ?? ""}`.trim()
+          : (user.user_metadata?.full_name as string | undefined) ||
+            (user.user_metadata?.first_name as string | undefined) ||
+            user.email;
+
+      const email = profile?.email ?? user.email ?? null;
+
+      const { data: inserted, error } = await supabase
+        .from("reservations")
+        .insert([
+          {
+            user_id: user.id, // uuid from auth
+            machine: eqName, // matches your 'machine' text column
+            start: startISO,
+            end: endISO,
+            duration, // int4
+            name: displayName || null,
+            email,
+          },
+        ])
+        .select("reservation_id, machine, start, end")
+        .single();
 
       if (error) {
         console.error("Insert error:", error);
@@ -126,6 +223,29 @@ export default function ReserveForm({
           selected.end
         )}`
       );
+      if (inserted) {
+        const insertedStart = new Date(inserted.start);
+        const insertedEnd = inserted.end ? new Date(inserted.end) : null;
+        const dateLabel = insertedStart.toLocaleDateString(undefined, {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+        });
+        const timeLabel = `${insertedStart.toLocaleTimeString([], {
+          hour: "numeric",
+          minute: "2-digit",
+        })}${insertedEnd ? ` - ${insertedEnd.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : ""}`;
+
+        setReservations((prev) => [
+          {
+            id: String(inserted.reservation_id ?? inserted.start ?? crypto.randomUUID()),
+            title: inserted.machine ?? eqName,
+            date: dateLabel,
+            time: timeLabel,
+          },
+          ...prev,
+        ]);
+      }
       setSelected(null);
     } finally {
       setLoading(false);
@@ -221,7 +341,27 @@ export default function ReserveForm({
 
       <section className="pt-4">
         <h2 className="text-lg font-semibold">Your Reservations</h2>
-        <p className="text-sm text-gray-600">Coming soon…</p>
+        {reservationsLoading ? (
+          <p className="text-sm text-[var(--text-secondary)]">Loading your reservations...</p>
+        ) : reservationsError ? (
+          <p className="text-sm text-[var(--text-secondary)]">{reservationsError}</p>
+        ) : reservations.length === 0 ? (
+          <p className="text-sm text-[var(--text-secondary)]">You have no reservations yet.</p>
+        ) : (
+          <div className="mt-2 space-y-2">
+            {reservations.map((res) => (
+              <div
+                key={res.id}
+                className="rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-2 text-sm"
+              >
+                <p className="font-semibold text-[var(--text-primary)]">{res.title}</p>
+                <p className="text-[var(--text-secondary)]">
+                  {res.date} • {res.time}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
       </section>
     </form>
   );
