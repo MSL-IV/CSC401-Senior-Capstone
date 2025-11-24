@@ -1,5 +1,42 @@
 @import "tailwindcss";
 
+/* ADA font scaling */
+:root {
+  --ada-body-scale: 1;
+  --ada-heading-scale: 1;
+  --ada-other-scale: 1;
+}
+
+html {
+  font-size: 16px;
+}
+
+body {
+  font-size: 1rem;
+}
+
+/* Tailwind text utilities scaling */
+:where(.text-xs) { font-size: calc(0.75rem * var(--ada-body-scale)) !important; }
+:where(.text-sm) { font-size: calc(0.875rem * var(--ada-body-scale)) !important; }
+:where(.text-base) { font-size: calc(1rem * var(--ada-body-scale)) !important; }
+:where(.text-lg) { font-size: calc(1.125rem * var(--ada-body-scale)) !important; }
+:where(.text-xl) { font-size: calc(1.25rem * var(--ada-body-scale)) !important; }
+:where(.text-2xl) { font-size: calc(1.5rem * var(--ada-body-scale)) !important; }
+:where(.text-3xl) { font-size: calc(1.875rem * var(--ada-body-scale)) !important; }
+:where(.text-4xl) { font-size: calc(2.25rem * var(--ada-body-scale)) !important; }
+:where(.text-5xl) { font-size: calc(3rem * var(--ada-body-scale)) !important; }
+:where(.text-6xl) { font-size: calc(3.75rem * var(--ada-body-scale)) !important; }
+
+/* Headings scale independently */
+:where(h1, h2, h3, h4, h5, h6, .font-heading) {
+  font-size: calc(1.3em * var(--ada-heading-scale)) !important;
+}
+
+/* Form/labels and other small UI */
+:where(button, input, select, textarea, label, small, legend, .ada-other) {
+  font-size: calc(1em * var(--ada-other-scale)) !important;
+}
+
 :root {
   --background: #f5f6f9;
   --surface: #ffffff;
