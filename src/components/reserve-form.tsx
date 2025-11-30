@@ -46,8 +46,10 @@ function generateSlots(
 
 export default function ReserveForm({
   equipment = [],
+  onReservationCreated,
 }: {
   equipment?: Equip[];
+  onReservationCreated?: () => void;
 }) {
   if (!equipment || equipment.length === 0) {
     return (
@@ -68,8 +70,11 @@ export default function ReserveForm({
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [reservationsLoading, setReservationsLoading] = useState(true);
-  const [reservationsError, setReservationsError] = useState<string | null>(null);
+  const [reservationsError, setReservationsError] = useState<string | null>(
+    null
+  );
   const [reservations, setReservations] = useState<ReservationItem[]>([]);
+  const [machineReservations, setMachineReservations] = useState<any[]>([]);
   const supabase = useMemo(() => createBrowserClient(), []);
 
   const slots = useMemo(() => {
@@ -132,7 +137,9 @@ export default function ReserveForm({
                 : ""
             }`;
             return {
-              id: String(res.reservation_id ?? res.start ?? crypto.randomUUID()),
+              id: String(
+                res.reservation_id ?? res.start ?? crypto.randomUUID()
+              ),
               title: res.machine ?? "Reservation",
               date: dateLabel,
               time: timeLabel,
@@ -149,6 +156,30 @@ export default function ReserveForm({
       active = false;
     };
   }, [supabase]);
+  useEffect(() => {
+    const loadMachineReservations = async () => {
+      if (!machineId || !date) return;
+
+      const startOfDay = `${date}T00:00:00`;
+      const endOfDay = `${date}T23:59:59`;
+
+      const { data, error } = await supabase
+        .from("reservations")
+        .select("start, end")
+        .eq("machine", machine.name) // machine stored as name in DB
+        .gte("start", startOfDay)
+        .lte("start", endOfDay);
+
+      if (error) {
+        console.error("Error loading machine reservations:", error);
+        setMachineReservations([]);
+      } else {
+        setMachineReservations(data || []);
+      }
+    };
+
+    loadMachineReservations();
+  }, [machineId, date]);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -161,11 +192,11 @@ export default function ReserveForm({
 
     setLoading(true);
     try {
-    // Get the logged-in user
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
+      // Get the logged-in user
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
 
       if (userError || !user) {
         setMessage("You must be logged in to make a reservation.");
@@ -197,11 +228,11 @@ export default function ReserveForm({
         .from("reservations")
         .insert([
           {
-            user_id: user.id, // uuid from auth
-            machine: eqName, // matches your 'machine' text column
+            user_id: user.id,
+            machine: eqName,
             start: startISO,
             end: endISO,
-            duration, // int4
+            duration,
             name: displayName || null,
             email,
           },
@@ -211,6 +242,17 @@ export default function ReserveForm({
 
       if (error) {
         console.error("Insert error:", error);
+
+        if (
+          error.message?.includes("reservations_no_overlap") ||
+          error.details?.includes("reservations_no_overlap")
+        ) {
+          setMessage(
+            "That time slot is already booked for this machine. Please choose another time."
+          );
+          return;
+        }
+
         setMessage(`Failed to create reservation: ${error.message}`);
         return;
       }
@@ -234,17 +276,27 @@ export default function ReserveForm({
         const timeLabel = `${insertedStart.toLocaleTimeString([], {
           hour: "numeric",
           minute: "2-digit",
-        })}${insertedEnd ? ` - ${insertedEnd.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : ""}`;
+        })}${
+          insertedEnd
+            ? ` - ${insertedEnd.toLocaleTimeString([], {
+                hour: "numeric",
+                minute: "2-digit",
+              })}`
+            : ""
+        }`;
 
         setReservations((prev) => [
           {
-            id: String(inserted.reservation_id ?? inserted.start ?? crypto.randomUUID()),
+            id: String(
+              inserted.reservation_id ?? inserted.start ?? crypto.randomUUID()
+            ),
             title: inserted.machine ?? eqName,
             date: dateLabel,
             time: timeLabel,
           },
           ...prev,
         ]);
+        onReservationCreated?.();
       }
       setSelected(null);
     } finally {
@@ -275,7 +327,15 @@ export default function ReserveForm({
           <select
             value={machineId}
             onChange={(e) => {
-              setMachineId(e.target.value);
+              const newDate = e.target.value;
+              const day = new Date(newDate).getDay();
+
+              if (day === 0 || day === 6) {
+                setMessage("Reservations are not available on weekends.");
+                return;
+              }
+
+              setDate(newDate);
               setSelected(null);
               setMessage("");
             }}
@@ -299,7 +359,13 @@ export default function ReserveForm({
             hour: "numeric",
             minute: "2-digit",
           })}`;
-          const disabled = isPast(s);
+          const overlapsExisting = machineReservations.some((r) => {
+            const rStart = new Date(r.start);
+            const rEnd = new Date(r.end);
+            return s.start < rEnd && s.end > rStart;
+          });
+
+          const disabled = isPast(s) || overlapsExisting;
           const isActive =
             selected &&
             selected.start.getTime() === s.start.getTime() &&
@@ -338,31 +404,6 @@ export default function ReserveForm({
       </button>
 
       {message && <p className="text-sm">{message}</p>}
-
-      <section className="pt-4">
-        <h2 className="text-lg font-semibold">Your Reservations</h2>
-        {reservationsLoading ? (
-          <p className="text-sm text-[var(--text-secondary)]">Loading your reservations...</p>
-        ) : reservationsError ? (
-          <p className="text-sm text-[var(--text-secondary)]">{reservationsError}</p>
-        ) : reservations.length === 0 ? (
-          <p className="text-sm text-[var(--text-secondary)]">You have no reservations yet.</p>
-        ) : (
-          <div className="mt-2 space-y-2">
-            {reservations.map((res) => (
-              <div
-                key={res.id}
-                className="rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-2 text-sm"
-              >
-                <p className="font-semibold text-[var(--text-primary)]">{res.title}</p>
-                <p className="text-[var(--text-secondary)]">
-                  {res.date} • {res.time}
-                </p>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
     </form>
   );
 }
