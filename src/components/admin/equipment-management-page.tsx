@@ -1,12 +1,6 @@
 "use client";
 
-<<<<<<< Updated upstream
 import { useMemo, useState } from "react";
-=======
-import { useEffect, useMemo, useState } from "react";
-import { createClient } from "@/utils/supabase/client";
-import { easternDateInputValue, formatInEastern } from "@/utils/time";
->>>>>>> Stashed changes
 
 type EquipmentStatus = "available" | "unavailable";
 
@@ -114,7 +108,6 @@ export function EquipmentManagementPage() {
     };
   }, [equipment]);
 
-<<<<<<< Updated upstream
   const toggleEquipmentStatus = (id: string) => {
     setEquipment((prev) =>
       prev.map((item) =>
@@ -125,65 +118,6 @@ export function EquipmentManagementPage() {
             }
           : item,
       ),
-=======
-  const toggleEquipmentStatus = async (id: string) => {
-    setUpdateLoading(id);
-    try {
-      const item = equipment.find(eq => eq.id === id);
-      if (!item) return;
-
-      const newActive = !item.active;
-      
-      const { error } = await supabase
-        .from('machines')
-        .update({ active: newActive })
-        .eq('id', id);
-
-      if (error) {
-        setError('Failed to update machine status: ' + error.message);
-        return;
-      }
-
-      // Update local state
-      setEquipment(prev => 
-        prev.map(item => 
-          item.id === id ? { ...item, active: newActive } : item
-        )
-      );
-    } catch (err) {
-      setError('An unexpected error occurred while updating machine');
-      console.error('Machine update error:', err);
-    } finally {
-      setUpdateLoading(null);
-    }
-  };
-
-  const formatTime = (timeString: string) => {
-    const date = new Date(timeString);
-    const todayEastern = easternDateInputValue();
-    const timeEasternDay = easternDateInputValue(date);
-
-    const timeFormatted = formatInEastern(date, {
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true
-    });
-
-    if (timeEasternDay === todayEastern) {
-      return `Today • ${timeFormatted}`;
-    }
-    return `${formatInEastern(date, { month: 'short', day: 'numeric' })} • ${timeFormatted}`;
-  };
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[var(--primary)] mx-auto mb-4"></div>
-          <p>Loading equipment data...</p>
-        </div>
-      </div>
->>>>>>> Stashed changes
     );
   };
 

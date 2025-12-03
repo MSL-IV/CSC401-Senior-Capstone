@@ -1,33 +1,14 @@
 "use client";
 
-<<<<<<< Updated upstream
 import { useMemo, useState } from "react";
-=======
-import { useEffect, useMemo, useState } from "react";
-import { createClient as createBrowserClient } from "@/utils/supabase/client";
-import {
-  easternDateInputValue,
-  formatInEastern,
-  zonedDateToUtc,
-} from "@/utils/time";
->>>>>>> Stashed changes
 
 type Equip = { id: string; name: string; slotMinutes: number };
 type Slot = { start: Date; end: Date };
 
-<<<<<<< Updated upstream
 function toISODate(d: Date) {
   const z = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
   return z.toISOString().slice(0, 10);
 }
-=======
-type ReservationItem = {
-  id: string;
-  title: string;
-  date: string;
-  time: string;
-};
->>>>>>> Stashed changes
 
 function generateSlots(
   day: string,
@@ -35,55 +16,20 @@ function generateSlots(
   close = "21:00",
   stepMinutes = 30
 ): Slot[] {
-<<<<<<< Updated upstream
   const start = new Date(`${day}T${open}:00`);
   const end = new Date(`${day}T${close}:00`);
-=======
-  const start = zonedDateToUtc(day, openTime);
-  const end = zonedDateToUtc(day, closeTime);
-  const step = Math.max(1, stepMinutes || 30);
-  if (
-    Number.isNaN(start.getTime()) ||
-    Number.isNaN(end.getTime()) ||
-    end <= start
-  ) {
-    return [];
-  }
-  // Prevent runaway loops if data comes back malformed.
-  const maxIterations = Math.ceil((24 * 60) / step) + 1;
->>>>>>> Stashed changes
   const out: Slot[] = [];
-  for (let cur = new Date(start), count = 0; cur < end && count < maxIterations; count++) {
-    const next = new Date(cur.getTime() + step * 60_000);
+  for (let cur = new Date(start); cur < end; ) {
+    const next = new Date(cur.getTime() + stepMinutes * 60_000);
     out.push({ start: new Date(cur), end: next });
     cur = next;
   }
   return out;
 }
 
-<<<<<<< Updated upstream
 export default function ReserveForm({ equipment }: { equipment: Equip[] }) {
   const [date, setDate] = useState(toISODate(new Date()));
   const [machineId, setMachineId] = useState(equipment[0]?.id ?? "");
-=======
-export default function ReserveForm({
-  equipment = [],
-  onReservationCreated,
-}: {
-  equipment?: Equip[];
-  onReservationCreated?: () => void;
-}) {
-  if (!equipment || equipment.length === 0) {
-    return (
-      <div className="text-sm text-gray-500">
-        No equipment available yet. Please check back later.
-      </div>
-    );
-  }
-  const [date, setDate] = useState(() => easternDateInputValue());
-  const [machineId, setMachineId] = useState(() => equipment[0]?.id ?? "");
-
->>>>>>> Stashed changes
   const machine = useMemo(
     () => equipment.find((e) => e.id === machineId) ?? equipment[0],
     [machineId, equipment]
@@ -94,123 +40,18 @@ export default function ReserveForm({
 
   const slots = useMemo(() => {
     const step = machine?.slotMinutes ?? 30;
-<<<<<<< Updated upstream
     return generateSlots(date, "09:00", "21:00", step);
-=======
-    const open = machine?.openTime ?? "09:00:00";
-    const close = machine?.closeTime ?? "17:00:00";
-    return generateSlots(date, open, close, step);
->>>>>>> Stashed changes
   }, [date, machine]);
 
-  const isPast = (s: Slot) =>
-    date === easternDateInputValue() && s.end < new Date();
+  const now = new Date();
+  const isPast = (s: Slot) => s.end < now && date === toISODate(now);
 
-<<<<<<< Updated upstream
   function onSubmit(e: React.FormEvent) {
-=======
-  useEffect(() => {
-    let active = true;
-    const loadReservations = async () => {
-      setReservationsLoading(true);
-      setReservationsError(null);
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser();
-      if (userError || !user) {
-        setReservations([]);
-        setReservationsLoading(false);
-        setReservationsError(null);
-        return;
-      }
-
-      const { data, error } = await supabase
-        .from("reservations")
-        .select("reservation_id, machine, start, end")
-        .eq("user_id", user.id)
-        .order("start", { ascending: false })
-        .limit(10);
-
-      if (!active) return;
-
-      if (error) {
-        setReservationsError("Unable to load reservations right now.");
-        setReservations([]);
-      } else {
-        const mapped =
-          data?.map((res) => {
-            const startDate = new Date(res.start as string);
-            const endDate = res.end ? new Date(res.end as string) : null;
-            const dateLabel = formatInEastern(startDate, {
-              month: "short",
-              day: "numeric",
-              year: "numeric",
-            });
-            const timeLabel = `${formatInEastern(startDate, {
-              hour: "numeric",
-              minute: "2-digit",
-            })}${
-              endDate
-                ? ` - ${formatInEastern(endDate, {
-                    hour: "numeric",
-                    minute: "2-digit",
-                  })}`
-                : ""
-            }`;
-            return {
-              id: String(
-                res.reservation_id ?? res.start ?? crypto.randomUUID()
-              ),
-              title: res.machine ?? "Reservation",
-              date: dateLabel,
-              time: timeLabel,
-            } satisfies ReservationItem;
-          }) ?? [];
-        setReservations(mapped);
-      }
-      setReservationsLoading(false);
-    };
-
-    loadReservations();
-
-    return () => {
-      active = false;
-    };
-  }, [supabase]);
-  useEffect(() => {
-    const loadMachineReservations = async () => {
-      if (!machineId || !date) return;
-
-      const startOfDay = zonedDateToUtc(date, "00:00:00").toISOString();
-      const endOfDay = zonedDateToUtc(date, "23:59:59").toISOString();
-
-      const { data, error } = await supabase
-        .from("reservations")
-        .select("start, end")
-        .eq("machine", machine.name) // machine stored as name in DB
-        .gte("start", startOfDay)
-        .lte("start", endOfDay);
-
-      if (error) {
-        console.error("Error loading machine reservations:", error);
-        setMachineReservations([]);
-      } else {
-        setMachineReservations(data || []);
-      }
-    };
-
-    loadMachineReservations();
-  }, [machineId, date]);
-
-  async function onSubmit(e: React.FormEvent) {
->>>>>>> Stashed changes
     e.preventDefault();
     if (!date || !machineId || !selected) {
       setMessage("Please choose a date, equipment, and a time slot.");
       return;
     }
-<<<<<<< Updated upstream
     const eqName = equipment.find((e) => e.id === machineId)?.name ?? machineId;
     const fmt = (d: Date) =>
       d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
@@ -225,115 +66,6 @@ export default function ReserveForm({
       start: selected.start.toISOString(),
       end: selected.end.toISOString(),
     });
-=======
-
-    setLoading(true);
-    try {
-      // Get the logged-in user
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser();
-
-      if (userError || !user) {
-        setMessage("You must be logged in to make a reservation.");
-        return;
-      }
-
-      const startISO = selected.start.toISOString();
-      const endISO = selected.end.toISOString();
-      const duration = machine.slotMinutes;
-      const eqName =
-        equipment.find((e) => e.id === machineId)?.name ?? machineId;
-
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("first_name, last_name, email")
-        .eq("id", user.id)
-        .single();
-
-      const displayName =
-        profile?.first_name || profile?.last_name
-          ? `${profile?.first_name ?? ""} ${profile?.last_name ?? ""}`.trim()
-          : (user.user_metadata?.full_name as string | undefined) ||
-            (user.user_metadata?.first_name as string | undefined) ||
-            user.email;
-
-      const email = profile?.email ?? user.email ?? null;
-
-      const { data: inserted, error } = await supabase
-        .from("reservations")
-        .insert([
-          {
-            user_id: user.id,
-            machine: eqName,
-            start: startISO,
-            end: endISO,
-            duration,
-            name: displayName || null,
-            email,
-          },
-        ])
-        .select("reservation_id, machine, start, end")
-        .single();
-
-      if (error) {
-        console.error("Insert error:", error);
-
-        if (
-          error.message?.includes("reservations_no_overlap") ||
-          error.details?.includes("reservations_no_overlap")
-        ) {
-          setMessage(
-            "That time slot is already booked for this machine. Please choose another time."
-          );
-          return;
-        }
-
-        setMessage(`Failed to create reservation: ${error.message}`);
-        return;
-      }
-
-      const fmt = (d: Date) =>
-        formatInEastern(d, { hour: "numeric", minute: "2-digit" });
-      const fmtDate = (d: Date) =>
-        formatInEastern(d, {
-          month: "short",
-          day: "numeric",
-          year: "numeric",
-        });
-
-      setMessage(
-        `✅ Reserved ${eqName} on ${fmtDate(
-          selected.start
-        )} from ${fmt(selected.start)} to ${fmt(selected.end)}`
-      );
-      if (inserted) {
-        const insertedStart = new Date(inserted.start);
-        const insertedEnd = inserted.end ? new Date(inserted.end) : null;
-        const dateLabel = fmtDate(insertedStart);
-        const timeLabel = `${fmt(insertedStart)}${
-          insertedEnd ? ` - ${fmt(insertedEnd)}` : ""
-        }`;
-
-        setReservations((prev) => [
-          {
-            id: String(
-              inserted.reservation_id ?? inserted.start ?? crypto.randomUUID()
-            ),
-            title: inserted.machine ?? eqName,
-            date: dateLabel,
-            time: timeLabel,
-          },
-          ...prev,
-        ]);
-        onReservationCreated?.();
-      }
-      setSelected(null);
-    } finally {
-      setLoading(false);
-    }
->>>>>>> Stashed changes
   }
 
   return (
@@ -344,7 +76,7 @@ export default function ReserveForm({
           <input
             type="date"
             value={date}
-            min={easternDateInputValue()}
+            min={toISODate(new Date())}
             onChange={(e) => {
               setDate(e.target.value);
               setSelected(null);
@@ -376,10 +108,10 @@ export default function ReserveForm({
 
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
         {slots.map((s, i) => {
-          const label = `${formatInEastern(s.start, {
+          const label = `${s.start.toLocaleTimeString([], {
             hour: "numeric",
             minute: "2-digit",
-          })}–${formatInEastern(s.end, {
+          })}–${s.end.toLocaleTimeString([], {
             hour: "numeric",
             minute: "2-digit",
           })}`;
