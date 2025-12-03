@@ -24,6 +24,9 @@ Once all the packages have been installed, you can then use 'npm run dev' to run
 
 Contact a team member for environment variables
 
+## Live Demonstration
+
+https://accessgranted-ewuzjo7q3-msl-ivs-projects.vercel.app/
 
 ## Team Members
 
