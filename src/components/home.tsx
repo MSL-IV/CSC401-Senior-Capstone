@@ -177,19 +177,17 @@ export function Home() {
       }}
     >
       <Navbar />
-      <main
-        className="mx-auto flex max-w-6xl flex-col items-center gap-16 px-6 py-20 text-center md:items-stretch md:text-left"
-      >
+      <main className="mx-auto flex w-full max-w-5xl flex-col items-center gap-16 px-4 py-20 text-center sm:px-5 md:px-8 md:items-stretch md:text-left overflow-x-hidden">
         <section
-          className="overflow-hidden rounded-3xl border bg-white shadow-sm"
+          className="w-full overflow-hidden rounded-3xl border shadow-sm bg-[var(--surface)] text-[var(--text-primary)]"
           style={{
             borderColor: "var(--border)",
             borderRadius: "var(--radius-card)",
             boxShadow: "var(--shadow-soft)",
           }}
         >
-          <div className="px-6 pt-12 text-center md:px-20 md:text-left">
-            <div className="mx-auto max-w-3xl space-y-6">
+          <div className="px-4 pt-12 text-center sm:px-6 md:px-10 md:text-left">
+            <div className="mx-auto w-full max-w-2xl space-y-6 sm:max-w-3xl">
               <h1
                 className="font-heading text-4xl font-bold tracking-tight md:text-5xl"
                 style={{ color: "var(--text-primary)" }}
@@ -213,7 +211,7 @@ export function Home() {
               }}
             />
           </div>
-          <div className="relative w-full overflow-hidden bg-white px-6 py-12 md:px-20">
+          <div className="relative w-full overflow-hidden px-0 py-12 sm:px-5 md:px-10 bg-[var(--surface)] text-[var(--text-primary)]">
             <div
               className="flex w-full transition-transform duration-700 ease-in-out"
               style={{
@@ -223,9 +221,9 @@ export function Home() {
               {heroSlides.map((slide) => (
                 <div
                   key={slide.id}
-                  className="flex w-full shrink-0 flex-col items-center gap-8 px-2 text-center md:px-4 md:text-left"
+                  className="flex basis-full shrink-0 flex-col items-center gap-8 px-1 text-center sm:px-2 md:px-10 md:text-left"
                 >
-                  <div className="mx-auto max-w-3xl space-y-4 md:mx-0">
+                  <div className="mx-auto w-full max-w-2xl space-y-4 sm:max-w-3xl md:mx-0">
                     <h2
                       className="font-heading text-2xl font-semibold tracking-tight md:text-3xl"
                       style={{ color: "var(--text-primary)" }}

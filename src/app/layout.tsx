@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Montserrat, Source_Sans_3 } from "next/font/google";
 import "./globals.css";
+import AdaControls from "@/components/ada-controls";
+
 
 const montserrat = Montserrat({
   variable: "--font-heading",
@@ -21,17 +23,12 @@ export const metadata: Metadata = {
   description: "Innovation hub for University of Tampa students",
 };
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body
-        className={`${montserrat.variable} ${sourceSans.variable} font-body antialiased`}
-      >
+      <body className={`${montserrat.variable} ${sourceSans.variable} font-body antialiased`}>
         {children}
+        <AdaControls />
       </body>
     </html>
   );

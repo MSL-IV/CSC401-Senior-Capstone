@@ -7,9 +7,9 @@ import { createClient } from "@/utils/supabase/client";
 import { Navbar } from "@/components/navbar";
 
 const inputStyles =
-  "w-full rounded-lg border border-neutral-200 bg-white px-4 py-2 text-sm shadow-sm outline-none transition focus:border-[var(--primary)] focus:ring-2 focus:ring-[rgba(200,16,46,0.2)]";
+  "w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-4 py-2 text-sm text-[var(--text-primary)] shadow-sm outline-none transition focus:border-[var(--primary)] focus:ring-2 focus:ring-[rgba(200,16,46,0.2)]";
 
-const labelStyles = "text-sm font-medium text-neutral-700";
+const labelStyles = "text-sm font-medium text-[var(--text-primary)]";
 
 export function LoginPage() {
   const [loginData, setLoginData] = useState({ email: "", password: "", remember: false });
@@ -125,23 +125,23 @@ export function LoginPage() {
   };
   return (
     <div
-      className="min-h-screen bg-neutral-100"
+      className="min-h-screen"
       style={{ backgroundColor: "var(--background)" }}
     >
       <Navbar />
       <main className="mx-auto flex max-w-6xl flex-col gap-12 px-6 py-12 lg:flex-row lg:py-20">
-        <section className="flex w-full flex-col justify-center gap-6 rounded-2xl border border-neutral-200 bg-white p-8 shadow-md lg:max-w-md">
+        <section className="flex w-full flex-col justify-center gap-6 rounded-2xl border p-8 shadow-md lg:max-w-md bg-[var(--surface)] text-[var(--text-primary)]" style={{ borderColor: "var(--border)" }}>
           <p
             className="font-heading text-xs font-semibold uppercase tracking-wider"
             style={{ color: "var(--primary)" }}
           >
             Makerspace Portal
           </p>
-          <h1 className="text-3xl font-semibold text-neutral-900">
+          <h1 className="text-3xl font-semibold" style={{ color: "var(--text-primary)" }}>
             Welcome back, Makers!
           </h1>
           <p
-            className="text-sm text-neutral-600"
+            className="text-sm"
             style={{ color: "var(--text-secondary)" }}
           >
             Log into your account to manage reservations, track equipment
@@ -186,7 +186,7 @@ export function LoginPage() {
               />
             </div>
             <div className="flex items-center justify-between text-sm">
-              <label className="flex items-center gap-2 text-neutral-600">
+              <label className="flex items-center gap-2" style={{ color: "var(--text-secondary)" }}>
                 <input
                   type="checkbox"
                   name="remember"
@@ -216,7 +216,7 @@ export function LoginPage() {
               {loginLoading ? "Logging in..." : "Log in"}
             </button>
           </form>
-          <p className="text-sm text-neutral-600">
+          <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
             Need an account?{" "}
             <a
               href="#create-account"
@@ -229,22 +229,20 @@ export function LoginPage() {
         </section>
         <section
           id="create-account"
-          className="flex w-full flex-1 flex-col justify-center gap-8 rounded-2xl border p-8 shadow-inner"
+          className="flex w-full flex-1 flex-col justify-center gap-8 rounded-2xl border p-8 shadow-inner bg-[var(--surface)] text-[var(--text-primary)]"
           style={{
-            borderColor: "rgba(200, 16, 46, 0.12)",
-            background:
-              "linear-gradient(135deg, rgba(200,16,46,0.05), rgba(10,31,58,0.03))",
+            borderColor: "var(--border)",
           }}
         >
           <div className="space-y-2">
             <h2
-              className="text-2xl font-semibold text-neutral-900"
+              className="text-2xl font-semibold"
               style={{ color: "var(--text-primary)" }}
             >
               Create a Makerspace Account
             </h2>
             <p
-              className="text-sm text-neutral-600"
+              className="text-sm"
               style={{ color: "var(--text-secondary)" }}
             >
               Unlock fabrication equipment, schedule workshops, and collaborate
@@ -253,12 +251,12 @@ export function LoginPage() {
             </p>
           </div>
           {signupError && (
-            <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">
+            <div className="rounded-lg bg-red-50/80 p-3 text-sm text-red-700">
               {signupError}
             </div>
           )}
           {signupSuccess && (
-            <div className="rounded-lg bg-green-50 p-3 text-sm text-green-700">
+            <div className="rounded-lg bg-green-50/80 p-3 text-sm text-green-700">
               Account created successfully! Please check your email to verify your account.
             </div>
           )}
@@ -364,7 +362,7 @@ export function LoginPage() {
               />
             </div>
             <div className="md:col-span-2">
-              <label className="flex items-start gap-3 text-xs text-neutral-600">
+              <label className="flex items-start gap-3 text-xs" style={{ color: "var(--text-secondary)" }}>
                 <input
                   type="checkbox"
                   name="terms"
@@ -393,8 +391,8 @@ export function LoginPage() {
               </button>
             </div>
           </form>
-          <div className="space-y-3 rounded-xl border border-white/60 bg-white/80 p-6 text-sm text-neutral-600 shadow-sm">
-            <p className="font-semibold text-neutral-800">
+          <div className="space-y-3 rounded-xl border p-6 text-sm shadow-sm bg-[var(--surface-muted)] text-[var(--text-secondary)]" style={{ borderColor: "var(--border)" }}>
+            <p className="font-semibold" style={{ color: "var(--text-primary)" }}>
               What happens next?
             </p>
             <ul className="space-y-2">

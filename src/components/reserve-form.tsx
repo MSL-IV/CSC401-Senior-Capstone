@@ -1,9 +1,23 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { createClient as createBrowserClient } from "@/utils/supabase/client";
 
-type Equip = { id: string; name: string; slotMinutes: number };
+type Equip = {
+  id: string;
+  name: string;
+  slotMinutes: number;
+  openTime: string;
+  closeTime: string;
+};
 type Slot = { start: Date; end: Date };
+
+type ReservationItem = {
+  id: string;
+  title: string;
+  date: string;
+  time: string;
+};
 
 function toISODate(d: Date) {
   const z = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
@@ -12,10 +26,13 @@ function toISODate(d: Date) {
 
 function generateSlots(
   day: string,
-  open = "09:00",
-  close = "21:00",
+  openTime = "09:00:00",
+  closeTime = "21:00:00",
   stepMinutes = 30
 ): Slot[] {
+  const open = openTime.slice(0, 5);
+  const close = closeTime.slice(0, 5);
+
   const start = new Date(`${day}T${open}:00`);
   const end = new Date(`${day}T${close}:00`);
   const out: Slot[] = [];
@@ -27,9 +44,23 @@ function generateSlots(
   return out;
 }
 
-export default function ReserveForm({ equipment }: { equipment: Equip[] }) {
+export default function ReserveForm({
+  equipment = [],
+  onReservationCreated,
+}: {
+  equipment?: Equip[];
+  onReservationCreated?: () => void;
+}) {
+  if (!equipment || equipment.length === 0) {
+    return (
+      <div className="text-sm text-gray-500">
+        No equipment available yet. Please check back later.
+      </div>
+    );
+  }
   const [date, setDate] = useState(toISODate(new Date()));
-  const [machineId, setMachineId] = useState(equipment[0]?.id ?? "");
+  const [machineId, setMachineId] = useState(() => equipment[0]?.id ?? "");
+
   const machine = useMemo(
     () => equipment.find((e) => e.id === machineId) ?? equipment[0],
     [machineId, equipment]
@@ -37,35 +68,240 @@ export default function ReserveForm({ equipment }: { equipment: Equip[] }) {
 
   const [selected, setSelected] = useState<Slot | null>(null);
   const [message, setMessage] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [reservationsLoading, setReservationsLoading] = useState(true);
+  const [reservationsError, setReservationsError] = useState<string | null>(
+    null
+  );
+  const [reservations, setReservations] = useState<ReservationItem[]>([]);
+  const [machineReservations, setMachineReservations] = useState<any[]>([]);
+  const supabase = useMemo(() => createBrowserClient(), []);
 
   const slots = useMemo(() => {
     const step = machine?.slotMinutes ?? 30;
-    return generateSlots(date, "09:00", "21:00", step);
+    const open = machine?.openTime ?? "09:00:00";
+    const close = machine?.closeTime ?? "21:00:00";
+    return generateSlots(date, open, close, step);
   }, [date, machine]);
 
   const now = new Date();
   const isPast = (s: Slot) => s.end < now && date === toISODate(now);
 
-  function onSubmit(e: React.FormEvent) {
+  useEffect(() => {
+    let active = true;
+    const loadReservations = async () => {
+      setReservationsLoading(true);
+      setReservationsError(null);
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
+      if (userError || !user) {
+        setReservations([]);
+        setReservationsLoading(false);
+        setReservationsError(null);
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from("reservations")
+        .select("reservation_id, machine, start, end")
+        .eq("user_id", user.id)
+        .order("start", { ascending: false })
+        .limit(10);
+
+      if (!active) return;
+
+      if (error) {
+        setReservationsError("Unable to load reservations right now.");
+        setReservations([]);
+      } else {
+        const mapped =
+          data?.map((res) => {
+            const startDate = new Date(res.start as string);
+            const endDate = res.end ? new Date(res.end as string) : null;
+            const dateLabel = startDate.toLocaleDateString(undefined, {
+              month: "short",
+              day: "numeric",
+              year: "numeric",
+            });
+            const timeLabel = `${startDate.toLocaleTimeString([], {
+              hour: "numeric",
+              minute: "2-digit",
+            })}${
+              endDate
+                ? ` - ${endDate.toLocaleTimeString([], {
+                    hour: "numeric",
+                    minute: "2-digit",
+                  })}`
+                : ""
+            }`;
+            return {
+              id: String(
+                res.reservation_id ?? res.start ?? crypto.randomUUID()
+              ),
+              title: res.machine ?? "Reservation",
+              date: dateLabel,
+              time: timeLabel,
+            } satisfies ReservationItem;
+          }) ?? [];
+        setReservations(mapped);
+      }
+      setReservationsLoading(false);
+    };
+
+    loadReservations();
+
+    return () => {
+      active = false;
+    };
+  }, [supabase]);
+  useEffect(() => {
+    const loadMachineReservations = async () => {
+      if (!machineId || !date) return;
+
+      const startOfDay = `${date}T00:00:00`;
+      const endOfDay = `${date}T23:59:59`;
+
+      const { data, error } = await supabase
+        .from("reservations")
+        .select("start, end")
+        .eq("machine", machine.name) // machine stored as name in DB
+        .gte("start", startOfDay)
+        .lte("start", endOfDay);
+
+      if (error) {
+        console.error("Error loading machine reservations:", error);
+        setMachineReservations([]);
+      } else {
+        setMachineReservations(data || []);
+      }
+    };
+
+    loadMachineReservations();
+  }, [machineId, date]);
+
+  async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!date || !machineId || !selected) {
+    setMessage("");
+
+    if (!date || !machineId || !selected || !machine) {
       setMessage("Please choose a date, equipment, and a time slot.");
       return;
     }
-    const eqName = equipment.find((e) => e.id === machineId)?.name ?? machineId;
-    const fmt = (d: Date) =>
-      d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-    setMessage(
-      `Selected: ${date} • ${fmt(selected.start)}–${fmt(
-        selected.end
-      )} • ${eqName}`
-    );
-    console.log({
-      date,
-      machineId,
-      start: selected.start.toISOString(),
-      end: selected.end.toISOString(),
-    });
+
+    setLoading(true);
+    try {
+      // Get the logged-in user
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
+
+      if (userError || !user) {
+        setMessage("You must be logged in to make a reservation.");
+        return;
+      }
+
+      const startISO = selected.start.toISOString();
+      const endISO = selected.end.toISOString();
+      const duration = machine.slotMinutes;
+      const eqName =
+        equipment.find((e) => e.id === machineId)?.name ?? machineId;
+
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("first_name, last_name, email")
+        .eq("id", user.id)
+        .single();
+
+      const displayName =
+        profile?.first_name || profile?.last_name
+          ? `${profile?.first_name ?? ""} ${profile?.last_name ?? ""}`.trim()
+          : (user.user_metadata?.full_name as string | undefined) ||
+            (user.user_metadata?.first_name as string | undefined) ||
+            user.email;
+
+      const email = profile?.email ?? user.email ?? null;
+
+      const { data: inserted, error } = await supabase
+        .from("reservations")
+        .insert([
+          {
+            user_id: user.id,
+            machine: eqName,
+            start: startISO,
+            end: endISO,
+            duration,
+            name: displayName || null,
+            email,
+          },
+        ])
+        .select("reservation_id, machine, start, end")
+        .single();
+
+      if (error) {
+        console.error("Insert error:", error);
+
+        if (
+          error.message?.includes("reservations_no_overlap") ||
+          error.details?.includes("reservations_no_overlap")
+        ) {
+          setMessage(
+            "That time slot is already booked for this machine. Please choose another time."
+          );
+          return;
+        }
+
+        setMessage(`Failed to create reservation: ${error.message}`);
+        return;
+      }
+
+      const fmt = (d: Date) =>
+        d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+
+      setMessage(
+        `✅ Reserved ${eqName} on ${date} from ${fmt(selected.start)} to ${fmt(
+          selected.end
+        )}`
+      );
+      if (inserted) {
+        const insertedStart = new Date(inserted.start);
+        const insertedEnd = inserted.end ? new Date(inserted.end) : null;
+        const dateLabel = insertedStart.toLocaleDateString(undefined, {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+        });
+        const timeLabel = `${insertedStart.toLocaleTimeString([], {
+          hour: "numeric",
+          minute: "2-digit",
+        })}${
+          insertedEnd
+            ? ` - ${insertedEnd.toLocaleTimeString([], {
+                hour: "numeric",
+                minute: "2-digit",
+              })}`
+            : ""
+        }`;
+
+        setReservations((prev) => [
+          {
+            id: String(
+              inserted.reservation_id ?? inserted.start ?? crypto.randomUUID()
+            ),
+            title: inserted.machine ?? eqName,
+            date: dateLabel,
+            time: timeLabel,
+          },
+          ...prev,
+        ]);
+        onReservationCreated?.();
+      }
+      setSelected(null);
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -91,7 +327,15 @@ export default function ReserveForm({ equipment }: { equipment: Equip[] }) {
           <select
             value={machineId}
             onChange={(e) => {
-              setMachineId(e.target.value);
+              const newDate = e.target.value;
+              const day = new Date(newDate).getDay();
+
+              if (day === 0 || day === 6) {
+                setMessage("Reservations are not available on weekends.");
+                return;
+              }
+
+              setDate(newDate);
               setSelected(null);
               setMessage("");
             }}
@@ -115,7 +359,13 @@ export default function ReserveForm({ equipment }: { equipment: Equip[] }) {
             hour: "numeric",
             minute: "2-digit",
           })}`;
-          const disabled = isPast(s);
+          const overlapsExisting = machineReservations.some((r) => {
+            const rStart = new Date(r.start);
+            const rEnd = new Date(r.end);
+            return s.start < rEnd && s.end > rStart;
+          });
+
+          const disabled = isPast(s) || overlapsExisting;
           const isActive =
             selected &&
             selected.start.getTime() === s.start.getTime() &&
@@ -150,15 +400,10 @@ export default function ReserveForm({ equipment }: { equipment: Equip[] }) {
           boxShadow: "var(--shadow-soft)",
         }}
       >
-        RESERVE
+        {loading ? "Reserving…" : "RESERVE"}
       </button>
 
       {message && <p className="text-sm">{message}</p>}
-
-      <section className="pt-4">
-        <h2 className="text-lg font-semibold">Your Reservations</h2>
-        <p className="text-sm text-gray-600">Coming soon…</p>
-      </section>
     </form>
   );
 }

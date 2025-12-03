@@ -1,5 +1,46 @@
 @import "tailwindcss";
 
+/* ADA font scaling */
+:root {
+  --ada-body-scale: 1;
+  --ada-heading-scale: 1;
+  --ada-other-scale: 1;
+  --ada-theme: light;
+  --ada-contrast: off;
+  --ada-animations: on;
+  --ada-highlight: off;
+}
+
+html {
+  font-size: 16px;
+}
+
+body {
+  font-size: 1rem;
+}
+
+/* Tailwind text utilities scaling */
+:where(.text-xs) { font-size: calc(0.75rem * var(--ada-body-scale)) !important; }
+:where(.text-sm) { font-size: calc(0.875rem * var(--ada-body-scale)) !important; }
+:where(.text-base) { font-size: calc(1rem * var(--ada-body-scale)) !important; }
+:where(.text-lg) { font-size: calc(1.125rem * var(--ada-body-scale)) !important; }
+:where(.text-xl) { font-size: calc(1.25rem * var(--ada-body-scale)) !important; }
+:where(.text-2xl) { font-size: calc(1.5rem * var(--ada-body-scale)) !important; }
+:where(.text-3xl) { font-size: calc(1.875rem * var(--ada-body-scale)) !important; }
+:where(.text-4xl) { font-size: calc(2.25rem * var(--ada-body-scale)) !important; }
+:where(.text-5xl) { font-size: calc(3rem * var(--ada-body-scale)) !important; }
+:where(.text-6xl) { font-size: calc(3.75rem * var(--ada-body-scale)) !important; }
+
+/* Headings scale independently */
+:where(h1, h2, h3, h4, h5, h6, .font-heading) {
+  font-size: calc(1.3em * var(--ada-heading-scale)) !important;
+}
+
+/* Form/labels and other small UI */
+:where(button, input, select, textarea, label, small, legend, .ada-other) {
+  font-size: calc(1em * var(--ada-other-scale)) !important;
+}
+
 :root {
   --background: #f5f6f9;
   --surface: #ffffff;
@@ -17,6 +58,65 @@
   --shadow-soft: 0 18px 40px -20px rgba(11, 31, 58, 0.3);
   --radius-card: 20px;
   --radius-button: 12px;
+}
+
+[data-ada-theme="dark"] {
+  --background: #0b1221;
+  --surface: #111827;
+  --surface-muted: #0f172a;
+  --border: #1f2937;
+  --primary: #e4002b;
+  --primary-hover: #ff4d6d;
+  --on-primary: #ffffff;
+  --secondary: #cbd5f5;
+  --secondary-accent: #9fb7ff;
+  --accent: #ff8fa3;
+  --text-primary: #e5e7eb;
+  --text-secondary: #cbd5e1;
+  --icon: #e5e7eb;
+  --shadow-soft: 0 18px 40px -20px rgba(0, 0, 0, 0.6);
+}
+
+[data-ada-contrast="on"] {
+  --background: #000000;
+  --surface: #0c0c0c;
+  --surface-muted: #0c0c0c;
+  --border: #ffffff;
+  --primary: #ff1744;
+  --primary-hover: #ff456b;
+  --on-primary: #ffffff;
+  --secondary: #ffffff;
+  --secondary-accent: #ffffff;
+  --accent: #ff1744;
+  --text-primary: #ffffff;
+  --text-secondary: #e0e0e0;
+  --icon: #ffffff;
+  --shadow-soft: 0 18px 40px -20px rgba(0, 0, 0, 0.85);
+}
+
+[data-ada-animations="off"] * {
+  animation: none !important;
+  transition: none !important;
+  scroll-behavior: auto !important;
+}
+
+[data-ada-highlight="on"] a,
+[data-ada-highlight="on"] a:visited {
+  position: relative;
+  outline: 3px solid var(--primary);
+  outline-offset: 3px;
+  text-decoration: underline !important;
+  text-decoration-color: var(--primary);
+  text-decoration-thickness: 0.18em;
+  text-underline-offset: 0.2em;
+  color: var(--text-primary) !important;
+  border-radius: 4px;
+}
+
+[data-ada-highlight="on"] a:hover,
+[data-ada-highlight="on"] a:focus-visible {
+  outline-color: var(--primary-hover);
+  text-decoration-color: var(--primary-hover);
 }
 
 @theme inline {
