@@ -3,6 +3,12 @@
 import { Navbar } from "@/components/navbar";
 import { SiteFooter } from "@/components/site-footer";
 import ReserveForm from "@/components/reserve-form";
+<<<<<<< Updated upstream
+=======
+import { useEffect, useState } from "react";
+import { createClient as createBrowserClient } from "@/utils/supabase/client";
+import { formatInEastern } from "@/utils/time";
+>>>>>>> Stashed changes
 
 export function Reserve() {
   // temporary data; swap for DB later
@@ -58,7 +64,64 @@ export function Reserve() {
 
           <div className="px-6 py-12 md:px-20">
             <div className="mx-auto max-w-4xl">
+<<<<<<< Updated upstream
               <ReserveForm equipment={equipment} />
+=======
+              <ReserveForm
+                equipment={equipment}
+                onReservationCreated={refreshReservations}
+              />
+              <div className="mt-10 border-t pt-8">
+                <h2 className="mb-4 text-lg font-semibold">
+                  Your Upcoming Reservations
+                </h2>
+
+                {loadingReservations ? (
+                  <p className="text-sm text-gray-500">Loading reservations…</p>
+                ) : reservationsError ? (
+                  <p className="text-sm text-red-600">{reservationsError}</p>
+                ) : reservations.length === 0 ? (
+                  <p className="text-sm text-gray-500">
+                    You have no upcoming reservations.
+                  </p>
+                ) : (
+                  <ul className="space-y-3">
+                    {reservations.map((r) => (
+                      <li
+                        key={r.reservation_id}
+                        className="flex items-center justify-between rounded-md border px-4 py-2 text-sm"
+                      >
+                        <div>
+                          <div className="font-medium">{r.machine}</div>
+                          <div className="text-xs text-gray-500">
+                            {formatInEastern(new Date(r.start), {
+                              weekday: "short",
+                              month: "short",
+                              day: "numeric",
+                              hour: "numeric",
+                              minute: "2-digit",
+                            })}{" "}
+                            –{" "}
+                            {formatInEastern(new Date(r.end), {
+                              hour: "numeric",
+                              minute: "2-digit",
+                            })}{" "}
+                            ({r.duration ?? "?"} min)
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleCancel(r.reservation_id)}
+                          className="text-xs font-semibold text-red-600 hover:underline"
+                        >
+                          Cancel
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+>>>>>>> Stashed changes
             </div>
           </div>
         </section>
