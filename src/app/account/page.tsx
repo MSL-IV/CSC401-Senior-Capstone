@@ -4,6 +4,7 @@ import { createClient } from "@/utils/supabase/server";
 import { Navbar } from "@/components/navbar";
 import { SiteFooter } from "@/components/site-footer";
 import { AccountReservations } from "@/components/account-reservations";
+import { formatInEastern } from "@/utils/time";
 
 type Profile = {
   first_name?: string | null;
@@ -38,7 +39,7 @@ export default async function AccountPage({
     .eq("id", user.id)
     .single();
 
-  const { data: reservations, error: reservationsError } = await supabase
+  const { data: reservations } = await supabase
     .from("reservations")
     .select("reservation_id, machine, start, end, duration")
     .eq("user_id", user.id)
@@ -48,9 +49,9 @@ export default async function AccountPage({
   const formatReservation = (entry: { id: string; machine: string | null; start: string; end: string }) => {
     const startDate = new Date(entry.start);
     const endDate = entry.end ? new Date(entry.end) : null;
-    const dateLabel = startDate.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
-    const timeLabel = `${startDate.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}${
-      endDate ? ` - ${endDate.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : ""
+    const dateLabel = formatInEastern(startDate, { month: "short", day: "numeric", year: "numeric" });
+    const timeLabel = `${formatInEastern(startDate, { hour: "numeric", minute: "2-digit" })}${
+      endDate ? ` - ${formatInEastern(endDate, { hour: "numeric", minute: "2-digit" })}` : ""
     }`;
     return {
       id: entry.id,

@@ -5,6 +5,7 @@ import { SiteFooter } from "@/components/site-footer";
 import ReserveForm from "@/components/reserve-form";
 import { useEffect, useState } from "react";
 import { createClient as createBrowserClient } from "@/utils/supabase/client";
+import { formatInEastern } from "@/utils/time";
 
 type Equipment = {
   id: string;
@@ -33,7 +34,6 @@ export function Reserve({ equipment }: { equipment: Equipment[] }) {
     const fetchReservations = async () => {
       const supabase = createBrowserClient();
 
-      // Get current user
       const {
         data: { user },
         error: userError,
@@ -65,6 +65,7 @@ export function Reserve({ equipment }: { equipment: Equipment[] }) {
 
     fetchReservations();
   }, []);
+
   const handleCancel = async (id: number) => {
     const supabase = createBrowserClient();
 
@@ -81,6 +82,7 @@ export function Reserve({ equipment }: { equipment: Equipment[] }) {
 
     setReservations((prev) => prev.filter((r) => r.reservation_id !== id));
   };
+
   const refreshReservations = async () => {
     const supabase = createBrowserClient();
 
@@ -133,7 +135,6 @@ export function Reserve({ equipment }: { equipment: Equipment[] }) {
                 slot.
               </p>
             </div>
-            {/* accent divider, matches Home */}
             <div
               className="mt-8 h-1 w-full rounded-full"
               style={{
@@ -172,7 +173,7 @@ export function Reserve({ equipment }: { equipment: Equipment[] }) {
                         <div>
                           <div className="font-medium">{r.machine}</div>
                           <div className="text-xs text-gray-500">
-                            {new Date(r.start).toLocaleString([], {
+                            {formatInEastern(new Date(r.start), {
                               weekday: "short",
                               month: "short",
                               day: "numeric",
@@ -180,7 +181,7 @@ export function Reserve({ equipment }: { equipment: Equipment[] }) {
                               minute: "2-digit",
                             })}{" "}
                             –{" "}
-                            {new Date(r.end).toLocaleTimeString([], {
+                            {formatInEastern(new Date(r.end), {
                               hour: "numeric",
                               minute: "2-digit",
                             })}{" "}
