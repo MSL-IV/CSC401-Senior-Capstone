@@ -118,16 +118,40 @@ export function ViewUsersPage() {
   // Update user in database
   async function updateUser(userId: string, updates: Partial<{ role: UserRole; status: UserStatus }>) {
     setUpdateLoading(userId);
+    console.log('Attempting to update user:', userId, 'with:', updates);
+    
     try {
-      const { error } = await supabase
-        .from('profiles')
-        .update(updates)
-        .eq('id', userId);
-
-      if (error) {
-        setError('Failed to update user: ' + error.message);
+      // Check current user authentication
+      const { data: { user: currentUser }, error: authError } = await supabase.auth.getUser();
+      if (authError || !currentUser) {
+        console.error('Authentication error:', authError);
+        setError('Authentication required to update users');
         return false;
       }
+      console.log('Current authenticated user:', currentUser.id);
+
+      // Perform the update
+      const { data, error, count } = await supabase
+        .from('profiles')
+        .update(updates)
+        .eq('id', userId)
+        .select(); // Add select to return updated data
+
+      console.log('Update result:', { data, error, count });
+
+      if (error) {
+        console.error('Database update error:', error);
+        setError(`Failed to update user: ${error.message} (Code: ${error.code})`);
+        return false;
+      }
+
+      if (!data || data.length === 0) {
+        console.warn('No rows were updated. User might not exist or RLS might be blocking the update.');
+        setError('No user was updated. Check permissions or user existence.');
+        return false;
+      }
+
+      console.log('Successfully updated user:', data[0]);
 
       // Update local state
       setUsers(prev => 
@@ -140,8 +164,8 @@ export function ViewUsersPage() {
       
       return true;
     } catch (err) {
+      console.error('Unexpected error during user update:', err);
       setError('An unexpected error occurred while updating user');
-      console.error('User update error:', err);
       return false;
     } finally {
       setUpdateLoading(null);

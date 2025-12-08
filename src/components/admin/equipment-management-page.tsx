@@ -111,21 +111,50 @@ export function EquipmentManagementPage() {
 
   const toggleEquipmentStatus = async (id: string) => {
     setUpdateLoading(id);
+    console.log('Attempting to toggle equipment status:', id);
+    
     try {
       const item = equipment.find(eq => eq.id === id);
-      if (!item) return;
-
-      const newActive = !item.active;
-      
-      const { error } = await supabase
-        .from('machines')
-        .update({ active: newActive })
-        .eq('id', id);
-
-      if (error) {
-        setError('Failed to update machine status: ' + error.message);
+      if (!item) {
+        console.error('Equipment item not found:', id);
+        setError('Equipment item not found');
         return;
       }
+
+      const newActive = !item.active;
+      console.log('Updating machine active status from', item.active, 'to', newActive);
+      
+      // Check current user authentication
+      const { data: { user: currentUser }, error: authError } = await supabase.auth.getUser();
+      if (authError || !currentUser) {
+        console.error('Authentication error:', authError);
+        setError('Authentication required to update equipment');
+        return;
+      }
+      console.log('Current authenticated user:', currentUser.id);
+
+      // Perform the update
+      const { data, error, count } = await supabase
+        .from('machines')
+        .update({ active: newActive })
+        .eq('id', id)
+        .select(); // Add select to return updated data
+
+      console.log('Update result:', { data, error, count });
+
+      if (error) {
+        console.error('Database update error:', error);
+        setError(`Failed to update machine status: ${error.message} (Code: ${error.code})`);
+        return;
+      }
+
+      if (!data || data.length === 0) {
+        console.warn('No rows were updated. Machine might not exist or RLS might be blocking the update.');
+        setError('No machine was updated. Check permissions or machine existence.');
+        return;
+      }
+
+      console.log('Successfully updated machine:', data[0]);
 
       setEquipment(prev => 
         prev.map(entry => 
@@ -133,8 +162,8 @@ export function EquipmentManagementPage() {
         )
       );
     } catch (err) {
+      console.error('Unexpected error during machine update:', err);
       setError('An unexpected error occurred while updating machine');
-      console.error('Machine update error:', err);
     } finally {
       setUpdateLoading(null);
     }
