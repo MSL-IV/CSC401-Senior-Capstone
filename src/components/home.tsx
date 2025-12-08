@@ -4,6 +4,7 @@ import { FeatureCard } from "@/components/feature-card";
 import { Navbar } from "@/components/navbar";
 import { SiteFooter } from "@/components/site-footer";
 import { useEffect, useState } from "react";
+import { createClient } from "@/utils/supabase/client";
 
 const heroSlides = [
   {
@@ -155,18 +156,65 @@ const features = [
 
 export function Home() {
   const [activeSlide, setActiveSlide] = useState(0);
+  const [isSignedIn, setIsSignedIn] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const supabase = createClient();
+
+  // Filter slides based on authentication status
+  const filteredSlides = isSignedIn 
+    ? heroSlides.filter(slide => slide.id !== "welcome")
+    : heroSlides;
 
   useEffect(() => {
+    // Check initial auth state
+    const checkAuth = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      setIsSignedIn(!!user);
+      setIsLoading(false);
+    };
+
+    checkAuth();
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      setIsSignedIn(!!session?.user);
+    });
+
+    return () => subscription.unsubscribe();
+  }, [supabase.auth]);
+
+  useEffect(() => {
+    if (filteredSlides.length === 0) return;
+    
     const timer = setInterval(() => {
-      setActiveSlide((prev) => (prev + 1) % heroSlides.length);
+      setActiveSlide((prev) => (prev + 1) % filteredSlides.length);
     }, 8000);
 
     return () => clearInterval(timer);
-  }, []);
+  }, [filteredSlides.length]);
 
   const handleDotClick = (index: number) => {
     setActiveSlide(index);
   };
+
+  // Show loading state while checking authentication
+  if (isLoading) {
+    return (
+      <div
+        className="min-h-screen"
+        style={{
+          backgroundColor: "var(--background)",
+          color: "var(--text-primary)",
+        }}
+      >
+        <Navbar />
+        <main className="flex items-center justify-center min-h-[50vh]">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[var(--primary)]"></div>
+        </main>
+        <SiteFooter />
+      </div>
+    );
+  }
 
   return (
     <div
@@ -218,7 +266,7 @@ export function Home() {
                 transform: `translateX(-${activeSlide * 100}%)`,
               }}
             >
-              {heroSlides.map((slide) => (
+              {filteredSlides.map((slide) => (
                 <div
                   key={slide.id}
                   className="flex basis-full shrink-0 flex-col items-center gap-8 px-1 text-center sm:px-2 md:px-10 md:text-left"
@@ -275,7 +323,7 @@ export function Home() {
               ))}
             </div>
             <div className="mt-10 flex items-center justify-center gap-3 md:justify-start">
-              {heroSlides.map((slide, index) => (
+              {filteredSlides.map((slide, index) => (
                 <button
                   type="button"
                   key={slide.id}
