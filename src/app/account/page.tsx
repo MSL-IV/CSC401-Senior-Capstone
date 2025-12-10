@@ -179,9 +179,11 @@ export default async function AccountPage({
               Quick Actions
             </p>
             <div className="space-y-3">
-              <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] px-4 py-3 text-sm text-[var(--text-secondary)]">
-                Change password (via Supabase reset link)
-              </div>
+              <Link
+                  href="/reset-password"
+                  className="rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] px-4 py-3 text-sm text-[var(--text-secondary)]">
+                Change password
+              </Link>
               <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] px-4 py-3 text-sm text-[var(--text-secondary)]">
                 Sign out everywhere (coming soon)
               </div>
