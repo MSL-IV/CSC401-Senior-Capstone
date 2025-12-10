@@ -70,6 +70,7 @@ export function ViewUsersPage() {
   const [statusFilter, setStatusFilter] = useState<"all" | UserStatus>("all");
   const [roleFilter, setRoleFilter] = useState<"all" | UserRole>("all");
   const [managingUserId, setManagingUserId] = useState<string | null>(null);
+  const [certCounts, setCertCounts] = useState<Record<string, { count: number; machines: string[] }>>({});
 
   // Fetch users from database
   async function fetchUsers() {
@@ -112,6 +113,44 @@ export function ViewUsersPage() {
     } catch (err) {
       setError('An unexpected error occurred while fetching users');
       console.error('Users fetch error:', err);
+    }
+  }
+
+  async function fetchTrainingCounts() {
+    try {
+      const { data, error } = await supabase
+        .from('training_certificates')
+        .select('user_id, machine_name');
+
+      if (error) {
+        console.error('Training certificates fetch error:', error);
+        setError('Failed to load training data: ' + error.message);
+        return;
+      }
+
+      const map: Record<string, { count: number; machines: string[] }> = {};
+      (data || []).forEach((row) => {
+        const userId = (row as { user_id: string }).user_id;
+        const machineName = (row as { machine_name: string | null }).machine_name;
+        if (!map[userId]) {
+          map[userId] = { count: 0, machines: [] };
+        }
+        map[userId].count += 1;
+        if (machineName) {
+          map[userId].machines.push(machineName);
+        }
+      });
+
+      setCertCounts(map);
+      setUsers(prev =>
+        prev.map(user => ({
+          ...user,
+          trainingsCompleted: map[user.id]?.count ?? 0,
+        }))
+      );
+    } catch (err) {
+      console.error('Unexpected error while fetching training data:', err);
+      setError('An unexpected error occurred while fetching training data');
     }
   }
 
@@ -177,6 +216,7 @@ export function ViewUsersPage() {
     async function loadUsers() {
       setLoading(true);
       await fetchUsers();
+      await fetchTrainingCounts();
       setLoading(false);
     }
     
@@ -219,6 +259,7 @@ export function ViewUsersPage() {
   }, [search, statusFilter, roleFilter, users]);
 
   const stats = useMemo(() => {
+    const trainedActive = users.filter((user) => user.status === "active" && (certCounts[user.id]?.count ?? 0) > 0).length;
     const totals = {
       active: users.filter((user) => user.status === "active").length,
       pending: users.filter((user) => user.status === "pending").length,
@@ -233,8 +274,8 @@ export function ViewUsersPage() {
       },
       {
         title: "Active & Trained",
-        value: totals.active,
-        change: "72% of user base",
+        value: trainedActive,
+        change: "Active users with at least one cert",
         accent: "text-emerald-600",
       },
       {
