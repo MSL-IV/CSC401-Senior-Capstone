@@ -78,6 +78,9 @@ export default function ReserveForm({
   const [machineReservations, setMachineReservations] = useState<
     { start: string; end: string }[]
   >([]);
+  const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null);
+  const [checkingTraining, setCheckingTraining] = useState(true);
+
   const supabase = useMemo(() => createBrowserClient(), []);
 
   const slots = useMemo(() => {
@@ -161,6 +164,54 @@ export default function ReserveForm({
       active = false;
     };
   }, [supabase]);
+  useEffect(() => {
+    const checkTraining = async () => {
+      setCheckingTraining(true);
+      setIsAuthorized(null);
+
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        setIsAuthorized(false);
+        setCheckingTraining(false);
+        return;
+      }
+
+      // Query training table
+      const { data, error } = await supabase
+        .from("training_certificates")
+        .select("expires_at")
+        .eq("user_id", user.id)
+        .eq("machine_name", machine?.name);
+
+      if (error) {
+        console.error("Training check error:", error);
+        setIsAuthorized(false);
+        setCheckingTraining(false);
+        return;
+      }
+
+      if (!data || data.length === 0) {
+        setIsAuthorized(false);
+        setCheckingTraining(false);
+        return;
+      }
+
+      // Training expiration check
+      const cert = data[0];
+      if (cert.expires_at && new Date(cert.expires_at) < new Date()) {
+        setIsAuthorized(false);
+      } else {
+        setIsAuthorized(true);
+      }
+
+      setCheckingTraining(false);
+    };
+
+    if (machine) checkTraining();
+  }, [machineId, machine]);
 
   useEffect(() => {
     const loadMachineReservations = async () => {
@@ -358,6 +409,16 @@ export default function ReserveForm({
           </select>
         </label>
       </div>
+      {isAuthorized === false && (
+        <p className="text-red-600 text-sm mb-4">
+          You are not authorized to use this machine. Complete required training
+          first.
+        </p>
+      )}
+
+      {checkingTraining && (
+        <p className="text-gray-500 text-sm mb-4">Checking training status…</p>
+      )}
 
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
         {slots.map((s, i) => {
@@ -374,7 +435,11 @@ export default function ReserveForm({
             return s.start < rEnd && s.end > rStart;
           });
 
-          const disabled = isPast(s) || overlapsExisting;
+          const disabled =
+            isPast(s) ||
+            overlapsExisting ||
+            checkingTraining ||
+            isAuthorized === false;
           const isActive =
             selected &&
             selected.start.getTime() === s.start.getTime() &&
@@ -403,6 +468,7 @@ export default function ReserveForm({
 
       <button
         type="submit"
+        disabled={loading || isAuthorized === false || checkingTraining}
         className="rounded-lg px-4 py-2 text-sm font-semibold text-white shadow transition hover:brightness-90"
         style={{
           backgroundColor: "var(--primary)",
