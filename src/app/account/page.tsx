@@ -181,21 +181,22 @@ export default async function AccountPage({
             <div className="space-y-3">
               <Link
                   href="/reset-password"
-                  className="rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] px-4 py-3 text-sm text-[var(--text-secondary)]">
+                  className="block rounded-lg border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-sm font-semibold text-[var(--secondary)] transition hover:bg-[var(--surface-muted)]"
+              >
                 Change password
               </Link>
-              <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] px-4 py-3 text-sm text-[var(--text-secondary)]">
+              <div className="block rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] px-4 py-3 text-sm font-semibold text-[var(--text-secondary)] transition hover:bg-[var(--surface)]">
                 Sign out everywhere (coming soon)
               </div>
               <Link
-                href="/account?cancel=1#reservations"
-                className="block rounded-lg border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-sm font-semibold text-[var(--secondary)] transition hover:bg-[var(--surface-muted)]"
+                  href="/account?cancel=1#reservations"
+                  className="block rounded-lg border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-sm font-semibold text-[var(--secondary)] transition hover:bg-[var(--surface-muted)]"
               >
                 Cancel a reservation
               </Link>
               <Link
-                href="/account?change=1#reservations"
-                className="block rounded-lg border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-sm font-semibold text-[var(--secondary)] transition hover:bg-[var(--surface-muted)]"
+                  href="/account?change=1#reservations"
+                  className="block rounded-lg border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-sm font-semibold text-[var(--secondary)] transition hover:bg-[var(--surface-muted)]"
               >
                 Change a reservation
               </Link>
