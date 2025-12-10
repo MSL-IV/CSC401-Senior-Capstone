@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/utils/supabase/client";
 import { easternDateInputValue, formatInEastern } from "@/utils/time";
@@ -391,12 +392,12 @@ export function EquipmentManagementPage() {
                 runs long.
               </p>
             </div>
-            <button
-              type="button"
+            <Link
+              href="/admin/schedule"
               className="rounded-[var(--radius-button)] border border-[var(--border)] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)] transition hover:border-[var(--secondary)] hover:text-[var(--text-primary)]"
             >
               View schedule
-            </button>
+            </Link>
           </div>
           <div className="grid gap-4 md:grid-cols-3">
             {reservations.map((reservation) => (
