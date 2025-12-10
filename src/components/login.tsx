@@ -197,7 +197,7 @@ export function LoginPage() {
                 Remember me
               </label>
               <Link
-                href="#"
+                href="/reset-password"
                 className="font-semibold transition hover:opacity-80"
                 style={{ color: "var(--primary)" }}
               >

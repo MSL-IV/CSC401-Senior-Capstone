@@ -1,7 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/utils/supabase/client";
+import { easternDateInputValue, formatInEastern } from "@/utils/time";
 
 type EquipmentStatus = "available" | "unavailable" | "maintenance";
 
@@ -29,7 +31,6 @@ type ActiveReservation = {
   user_id: string;
 };
 
-// Create Supabase client
 const supabase = createClient();
 
 export function EquipmentManagementPage() {
@@ -39,7 +40,6 @@ export function EquipmentManagementPage() {
   const [error, setError] = useState<string | null>(null);
   const [updateLoading, setUpdateLoading] = useState<string | null>(null);
 
-  // Fetch equipment data
   async function fetchEquipment() {
     try {
       const { data, error } = await supabase
@@ -59,7 +59,6 @@ export function EquipmentManagementPage() {
     }
   }
 
-  // Fetch active reservations
   async function fetchReservations() {
     try {
       const { data, error } = await supabase
@@ -72,7 +71,6 @@ export function EquipmentManagementPage() {
         return;
       }
 
-      // Filter for current/active reservations
       const now = new Date();
       const activeReservations = (data || []).filter(res => {
         const startTime = new Date(res.start);
@@ -80,14 +78,13 @@ export function EquipmentManagementPage() {
         return startTime <= now && endTime >= now;
       });
 
-      setReservations(activeReservations);
+      setReservations(activeReservations as ActiveReservation[]);
     } catch (err) {
       setError('An unexpected error occurred while fetching reservations');
       console.error('Reservations fetch error:', err);
     }
   }
 
-  // Load data on component mount
   useEffect(() => {
     async function loadData() {
       setLoading(true);
@@ -104,7 +101,7 @@ export function EquipmentManagementPage() {
   const summary = useMemo(() => {
     const total = equipment.length;
     const available = equipment.filter((item) => item.active === true).length;
-    const inUse = reservations.length; // All fetched reservations are active
+    const inUse = reservations.length;
     return {
       total,
       available,
@@ -115,31 +112,59 @@ export function EquipmentManagementPage() {
 
   const toggleEquipmentStatus = async (id: string) => {
     setUpdateLoading(id);
+    console.log('Attempting to toggle equipment status:', id);
+    
     try {
       const item = equipment.find(eq => eq.id === id);
-      if (!item) return;
-
-      const newActive = !item.active;
-      
-      const { error } = await supabase
-        .from('machines')
-        .update({ active: newActive })
-        .eq('id', id);
-
-      if (error) {
-        setError('Failed to update machine status: ' + error.message);
+      if (!item) {
+        console.error('Equipment item not found:', id);
+        setError('Equipment item not found');
         return;
       }
 
-      // Update local state
+      const newActive = !item.active;
+      console.log('Updating machine active status from', item.active, 'to', newActive);
+      
+      // Check current user authentication
+      const { data: { user: currentUser }, error: authError } = await supabase.auth.getUser();
+      if (authError || !currentUser) {
+        console.error('Authentication error:', authError);
+        setError('Authentication required to update equipment');
+        return;
+      }
+      console.log('Current authenticated user:', currentUser.id);
+
+      // Perform the update
+      const { data, error, count } = await supabase
+        .from('machines')
+        .update({ active: newActive })
+        .eq('id', id)
+        .select(); // Add select to return updated data
+
+      console.log('Update result:', { data, error, count });
+
+      if (error) {
+        console.error('Database update error:', error);
+        setError(`Failed to update machine status: ${error.message} (Code: ${error.code})`);
+        return;
+      }
+
+      if (!data || data.length === 0) {
+        console.warn('No rows were updated. Machine might not exist or RLS might be blocking the update.');
+        setError('No machine was updated. Check permissions or machine existence.');
+        return;
+      }
+
+      console.log('Successfully updated machine:', data[0]);
+
       setEquipment(prev => 
-        prev.map(item => 
-          item.id === id ? { ...item, active: newActive } : item
+        prev.map(entry => 
+          entry.id === id ? { ...entry, active: newActive } : entry
         )
       );
     } catch (err) {
+      console.error('Unexpected error during machine update:', err);
       setError('An unexpected error occurred while updating machine');
-      console.error('Machine update error:', err);
     } finally {
       setUpdateLoading(null);
     }
@@ -147,21 +172,19 @@ export function EquipmentManagementPage() {
 
   const formatTime = (timeString: string) => {
     const date = new Date(timeString);
-    const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const timeDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-    
-    const timeFormatted = date.toLocaleTimeString('en-US', {
+    const todayEastern = easternDateInputValue();
+    const timeEasternDay = easternDateInputValue(date);
+
+    const timeFormatted = formatInEastern(date, {
       hour: 'numeric',
       minute: '2-digit',
       hour12: true
     });
 
-    if (timeDate.getTime() === today.getTime()) {
+    if (timeEasternDay === todayEastern) {
       return `Today • ${timeFormatted}`;
-    } else {
-      return `${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} • ${timeFormatted}`;
     }
+    return `${formatInEastern(date, { month: 'short', day: 'numeric' })} • ${timeFormatted}`;
   };
 
   if (loading) {
@@ -369,12 +392,12 @@ export function EquipmentManagementPage() {
                 runs long.
               </p>
             </div>
-            <button
-              type="button"
+            <Link
+              href="/admin/schedule"
               className="rounded-[var(--radius-button)] border border-[var(--border)] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)] transition hover:border-[var(--secondary)] hover:text-[var(--text-primary)]"
             >
               View schedule
-            </button>
+            </Link>
           </div>
           <div className="grid gap-4 md:grid-cols-3">
             {reservations.map((reservation) => (

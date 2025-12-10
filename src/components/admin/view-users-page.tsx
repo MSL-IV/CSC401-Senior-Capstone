@@ -70,6 +70,7 @@ export function ViewUsersPage() {
   const [statusFilter, setStatusFilter] = useState<"all" | UserStatus>("all");
   const [roleFilter, setRoleFilter] = useState<"all" | UserRole>("all");
   const [managingUserId, setManagingUserId] = useState<string | null>(null);
+  const [certCounts, setCertCounts] = useState<Record<string, { count: number; machines: string[] }>>({});
 
   // Fetch users from database
   async function fetchUsers() {
@@ -115,19 +116,81 @@ export function ViewUsersPage() {
     }
   }
 
+  async function fetchTrainingCounts() {
+    try {
+      const { data, error } = await supabase
+        .from('training_certificates')
+        .select('user_id, machine_name');
+
+      if (error) {
+        console.error('Training certificates fetch error:', error);
+        setError('Failed to load training data: ' + error.message);
+        return;
+      }
+
+      const map: Record<string, { count: number; machines: string[] }> = {};
+      (data || []).forEach((row) => {
+        const userId = (row as { user_id: string }).user_id;
+        const machineName = (row as { machine_name: string | null }).machine_name;
+        if (!map[userId]) {
+          map[userId] = { count: 0, machines: [] };
+        }
+        map[userId].count += 1;
+        if (machineName) {
+          map[userId].machines.push(machineName);
+        }
+      });
+
+      setCertCounts(map);
+      setUsers(prev =>
+        prev.map(user => ({
+          ...user,
+          trainingsCompleted: map[user.id]?.count ?? 0,
+        }))
+      );
+    } catch (err) {
+      console.error('Unexpected error while fetching training data:', err);
+      setError('An unexpected error occurred while fetching training data');
+    }
+  }
+
   // Update user in database
   async function updateUser(userId: string, updates: Partial<{ role: UserRole; status: UserStatus }>) {
     setUpdateLoading(userId);
+    console.log('Attempting to update user:', userId, 'with:', updates);
+    
     try {
-      const { error } = await supabase
-        .from('profiles')
-        .update(updates)
-        .eq('id', userId);
-
-      if (error) {
-        setError('Failed to update user: ' + error.message);
+      // Check current user authentication
+      const { data: { user: currentUser }, error: authError } = await supabase.auth.getUser();
+      if (authError || !currentUser) {
+        console.error('Authentication error:', authError);
+        setError('Authentication required to update users');
         return false;
       }
+      console.log('Current authenticated user:', currentUser.id);
+
+      // Perform the update
+      const { data, error, count } = await supabase
+        .from('profiles')
+        .update(updates)
+        .eq('id', userId)
+        .select(); // Add select to return updated data
+
+      console.log('Update result:', { data, error, count });
+
+      if (error) {
+        console.error('Database update error:', error);
+        setError(`Failed to update user: ${error.message} (Code: ${error.code})`);
+        return false;
+      }
+
+      if (!data || data.length === 0) {
+        console.warn('No rows were updated. User might not exist or RLS might be blocking the update.');
+        setError('No user was updated. Check permissions or user existence.');
+        return false;
+      }
+
+      console.log('Successfully updated user:', data[0]);
 
       // Update local state
       setUsers(prev => 
@@ -140,8 +203,8 @@ export function ViewUsersPage() {
       
       return true;
     } catch (err) {
+      console.error('Unexpected error during user update:', err);
       setError('An unexpected error occurred while updating user');
-      console.error('User update error:', err);
       return false;
     } finally {
       setUpdateLoading(null);
@@ -153,6 +216,7 @@ export function ViewUsersPage() {
     async function loadUsers() {
       setLoading(true);
       await fetchUsers();
+      await fetchTrainingCounts();
       setLoading(false);
     }
     
@@ -195,6 +259,7 @@ export function ViewUsersPage() {
   }, [search, statusFilter, roleFilter, users]);
 
   const stats = useMemo(() => {
+    const trainedActive = users.filter((user) => user.status === "active" && (certCounts[user.id]?.count ?? 0) > 0).length;
     const totals = {
       active: users.filter((user) => user.status === "active").length,
       pending: users.filter((user) => user.status === "pending").length,
@@ -209,8 +274,8 @@ export function ViewUsersPage() {
       },
       {
         title: "Active & Trained",
-        value: totals.active,
-        change: "72% of user base",
+        value: trainedActive,
+        change: "Active users with at least one cert",
         accent: "text-emerald-600",
       },
       {

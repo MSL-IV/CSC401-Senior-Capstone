@@ -4,6 +4,7 @@ import { createClient } from "@/utils/supabase/server";
 import { Navbar } from "@/components/navbar";
 import { SiteFooter } from "@/components/site-footer";
 import { AccountReservations } from "@/components/account-reservations";
+import { formatInEastern } from "@/utils/time";
 
 type Profile = {
   first_name?: string | null;
@@ -11,11 +12,14 @@ type Profile = {
   email?: string | null;
   student_id?: string | null;
 };
-
-const mockCertifications = [
-  { id: "cert-3d", name: "3D Printer Safety", status: "Completed", date: "Jan 12, 2024" },
-  { id: "cert-laser", name: "Laser Cutter Basics", status: "Completed", date: "Feb 02, 2024" },
-];
+type TrainingCertificate = {
+  id: string;
+  machine_name: string | null;
+  completed_at: string | null;
+  expires_at: string | null;
+  issued_by: string | null;
+  score: number | null;
+};
 
 export default async function AccountPage({
   searchParams,
@@ -38,19 +42,25 @@ export default async function AccountPage({
     .eq("id", user.id)
     .single();
 
-  const { data: reservations, error: reservationsError } = await supabase
+  const { data: reservations } = await supabase
     .from("reservations")
     .select("reservation_id, machine, start, end, duration")
     .eq("user_id", user.id)
     .order("start", { ascending: false })
     .limit(10);
 
+  const { data: trainingCerts } = await supabase
+    .from("training_certificates")
+    .select("id, machine_name, completed_at, expires_at, issued_by, score")
+    .eq("user_id", user.id)
+    .order("completed_at", { ascending: false });
+
   const formatReservation = (entry: { id: string; machine: string | null; start: string; end: string }) => {
     const startDate = new Date(entry.start);
     const endDate = entry.end ? new Date(entry.end) : null;
-    const dateLabel = startDate.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
-    const timeLabel = `${startDate.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}${
-      endDate ? ` - ${endDate.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : ""
+    const dateLabel = formatInEastern(startDate, { month: "short", day: "numeric", year: "numeric" });
+    const timeLabel = `${formatInEastern(startDate, { hour: "numeric", minute: "2-digit" })}${
+      endDate ? ` - ${formatInEastern(endDate, { hour: "numeric", minute: "2-digit" })}` : ""
     }`;
     return {
       id: entry.id,
@@ -69,6 +79,21 @@ export default async function AccountPage({
         end: res.end as string,
       }),
       reservationId: res.reservation_id ?? res.start ?? res.machine ?? crypto.randomUUID(),
+    })) ?? [];
+
+  const certifications =
+    trainingCerts?.map((cert) => ({
+      id: cert.id,
+      name: cert.machine_name ?? "Training",
+      status: cert.completed_at ? "Completed" : "Pending",
+      date: cert.completed_at
+        ? formatInEastern(new Date(cert.completed_at), {
+            month: "short",
+            day: "numeric",
+            year: "numeric",
+          })
+        : "—",
+      score: cert.score,
     })) ?? [];
 
   const resolvedParams = searchParams instanceof Promise ? await searchParams : searchParams;
@@ -154,21 +179,24 @@ export default async function AccountPage({
               Quick Actions
             </p>
             <div className="space-y-3">
-              <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] px-4 py-3 text-sm text-[var(--text-secondary)]">
-                Change password (via Supabase reset link)
-              </div>
-              <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] px-4 py-3 text-sm text-[var(--text-secondary)]">
+              <Link
+                  href="/reset-password"
+                  className="block rounded-lg border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-sm font-semibold text-[var(--secondary)] transition hover:bg-[var(--surface-muted)]"
+              >
+                Change password
+              </Link>
+              <div className="block rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] px-4 py-3 text-sm font-semibold text-[var(--text-secondary)] transition hover:bg-[var(--surface)]">
                 Sign out everywhere (coming soon)
               </div>
               <Link
-                href="/account?cancel=1#reservations"
-                className="block rounded-lg border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-sm font-semibold text-[var(--secondary)] transition hover:bg-[var(--surface-muted)]"
+                  href="/account?cancel=1#reservations"
+                  className="block rounded-lg border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-sm font-semibold text-[var(--secondary)] transition hover:bg-[var(--surface-muted)]"
               >
                 Cancel a reservation
               </Link>
               <Link
-                href="/account?change=1#reservations"
-                className="block rounded-lg border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-sm font-semibold text-[var(--secondary)] transition hover:bg-[var(--surface-muted)]"
+                  href="/account?change=1#reservations"
+                  className="block rounded-lg border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-sm font-semibold text-[var(--secondary)] transition hover:bg-[var(--surface-muted)]"
               >
                 Change a reservation
               </Link>
@@ -186,19 +214,26 @@ export default async function AccountPage({
                 <h2 className="font-heading text-xl font-semibold">Your certifications</h2>
               </div>
             </div>
-            <div className="space-y-3">
-              {mockCertifications.map((cert) => (
-                <div
-                  key={cert.id}
-                  className="rounded-2xl border border-[var(--border)] bg-[var(--surface-muted)] px-4 py-3"
-                >
-                  <p className="font-semibold text-[var(--text-primary)]">{cert.name}</p>
-                  <p className="text-sm text-[var(--text-secondary)]">
-                    {cert.status} • {cert.date}
-                  </p>
-                </div>
-              ))}
-            </div>
+            {certifications.length === 0 ? (
+              <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-muted)] px-4 py-3 text-sm text-[var(--text-secondary)]">
+                No training certificates yet. Complete a training to unlock access.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {certifications.map((cert) => (
+                  <div
+                    key={cert.id}
+                    className="rounded-2xl border border-[var(--border)] bg-[var(--surface-muted)] px-4 py-3"
+                  >
+                    <p className="font-semibold text-[var(--text-primary)]">{cert.name}</p>
+                    <p className="text-sm text-[var(--text-secondary)]">
+                      {cert.status} • {cert.date}
+                      {cert.score ? ` • Score ${cert.score}%` : ""}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
           <div className="space-y-4 rounded-3xl border bg-[var(--surface)] p-6 shadow-sm" id="reservations">
             <div className="flex items-center justify-between">

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Navbar } from "@/components/navbar";
 import { SiteFooter } from "@/components/site-footer";
 import { createClient } from "@/utils/supabase/client";
+import { formatInEastern } from "@/utils/time";
 
 type Machine = {
   id: string;
@@ -47,7 +48,6 @@ export function EquipmentStatus() {
       try {
         setLoading(true);
         
-        // Fetch machines
         const { data: machines, error: machinesError } = await supabase
           .from('machines')
           .select('*')
@@ -58,7 +58,6 @@ export function EquipmentStatus() {
           return;
         }
 
-        // Fetch active reservations
         const now = new Date();
         const { data: reservations, error: reservationsError } = await supabase
           .from('reservations')
@@ -71,7 +70,6 @@ export function EquipmentStatus() {
           return;
         }
 
-        // Transform data to equipment status format
         const statuses: EquipmentStatus[] = (machines || []).map((machine: Machine) => {
           if (!machine.active) {
             return {
@@ -83,7 +81,6 @@ export function EquipmentStatus() {
             };
           }
 
-          // Check if machine is currently in use
           const currentReservation = (reservations || []).find((res: Reservation) => 
             res.machine === machine.name && 
             new Date(res.start) <= now && 
@@ -102,7 +99,6 @@ export function EquipmentStatus() {
             };
           }
 
-          // Check for next reservation
           const nextReservation = (reservations || []).find((res: Reservation) => 
             res.machine === machine.name && 
             new Date(res.start) > now
@@ -110,7 +106,7 @@ export function EquipmentStatus() {
 
           if (nextReservation) {
             const startTime = new Date(nextReservation.start);
-            const timeString = startTime.toLocaleTimeString('en-US', {
+            const timeString = formatInEastern(startTime, {
               hour: 'numeric',
               minute: '2-digit',
               hour12: true
@@ -144,7 +140,6 @@ export function EquipmentStatus() {
 
     fetchMachinesAndReservations();
     
-    // Refresh every 30 seconds for real-time updates
     const interval = setInterval(fetchMachinesAndReservations, 30000);
     return () => clearInterval(interval);
   }, []);
@@ -240,23 +235,23 @@ export function EquipmentStatus() {
               }}
             >
               <div className="flex items-center justify-between">
-                <h2 className="text-xl font-semibold" style={{ color: "var(--text-primary)" }}>
-                  {equipment.name}
-                </h2>
+                <h3 className="font-heading text-xl font-semibold">{equipment.name}</h3>
                 <span
-                  className="rounded-full px-3 py-1 text-sm font-semibold"
-                  style={{
-                    backgroundColor: "var(--primary)",
-                    color: "var(--on-primary)",
-                  }}
+                  className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                    equipment.status === "Available"
+                      ? "bg-emerald-50 text-emerald-700"
+                      : equipment.status === "In Use"
+                      ? "bg-amber-50 text-amber-700"
+                      : "bg-rose-50 text-rose-700"
+                  }`}
                 >
                   {equipment.status}
                 </span>
               </div>
-              <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
+              <p className="text-sm text-[var(--text-secondary)]">
                 {equipment.description}
               </p>
-              <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+              <p className="text-sm text-[var(--text-secondary)]">
                 {equipment.statusDetail}
               </p>
             </article>
@@ -267,5 +262,3 @@ export function EquipmentStatus() {
     </div>
   );
 }
-
-export default EquipmentStatus;

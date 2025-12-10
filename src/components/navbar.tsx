@@ -298,6 +298,27 @@ export function Navbar() {
                             />
                           </svg>
                         </Link>
+                        <Link
+                          href="/training"
+                          className="flex items-center justify-between rounded-lg px-3 py-2 font-semibold text-[var(--text-primary)] transition hover:bg-[var(--surface-muted)]"
+                          onClick={() => setMenuOpen(false)}
+                        >
+                          My Training
+                          <svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            xmlns="http://www.w3.org/2000/svg"
+                            className="h-5 w-5"
+                          >
+                            <path
+                              d="m9 18 6-6-6-6"
+                              stroke="currentColor"
+                              strokeWidth={1.8}
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                          </svg>
+                        </Link>
                         {profileRole === "admin" && (
                           <Link
                             href="/admin"

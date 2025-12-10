@@ -2,6 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { createClient as createBrowserClient } from "@/utils/supabase/client";
+import {
+  easternDateInputValue,
+  formatInEastern,
+  zonedDateToUtc,
+} from "@/utils/time";
 
 type Equip = {
   id: string;
@@ -19,22 +24,23 @@ type ReservationItem = {
   time: string;
 };
 
-function toISODate(d: Date) {
-  const z = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
-  return z.toISOString().slice(0, 10);
-}
-
 function generateSlots(
   day: string,
   openTime = "09:00:00",
-  closeTime = "21:00:00",
+  closeTime = "17:00:00",
   stepMinutes = 30
 ): Slot[] {
-  const open = openTime.slice(0, 5);
-  const close = closeTime.slice(0, 5);
-
-  const start = new Date(`${day}T${open}:00`);
-  const end = new Date(`${day}T${close}:00`);
+  const start = zonedDateToUtc(day, openTime);
+  const end = zonedDateToUtc(day, closeTime);
+  const step = Math.max(1, stepMinutes || 30);
+  if (
+    Number.isNaN(start.getTime()) ||
+    Number.isNaN(end.getTime()) ||
+    end <= start
+  ) {
+    return [];
+  }
+  const maxIterations = Math.ceil((24 * 60) / step) + 1;
   const out: Slot[] = [];
   for (let cur = new Date(start); cur < end; ) {
     const next = new Date(cur.getTime() + stepMinutes * 60_000);
@@ -52,18 +58,12 @@ export default function ReserveForm({
   equipment?: Equip[];
   onReservationCreated?: () => void;
 }) {
-  if (!equipment || equipment.length === 0) {
-    return (
-      <div className="text-sm text-gray-500">
-        No equipment available yet. Please check back later.
-      </div>
-    );
-  }
-  const [date, setDate] = useState(toISODate(new Date()));
-  const [machineId, setMachineId] = useState(() => equipment[0]?.id ?? "");
+  const hasEquipment = equipment && equipment.length > 0;
 
+  const [date, setDate] = useState(() => easternDateInputValue());
+  const [machineId, setMachineId] = useState(() => equipment[0]?.id ?? "");
   const machine = useMemo(
-    () => equipment.find((e) => e.id === machineId) ?? equipment[0],
+    () => equipment.find((e) => e.id === machineId) ?? equipment[0] ?? null,
     [machineId, equipment]
   );
 
@@ -75,18 +75,21 @@ export default function ReserveForm({
     null
   );
   const [reservations, setReservations] = useState<ReservationItem[]>([]);
-  const [machineReservations, setMachineReservations] = useState<any[]>([]);
+  const [machineReservations, setMachineReservations] = useState<
+    { start: string; end: string }[]
+  >([]);
   const supabase = useMemo(() => createBrowserClient(), []);
 
   const slots = useMemo(() => {
-    const step = machine?.slotMinutes ?? 30;
-    const open = machine?.openTime ?? "09:00:00";
-    const close = machine?.closeTime ?? "21:00:00";
+    if (!machine) return [];
+    const step = machine.slotMinutes ?? 30;
+    const open = machine.openTime ?? "09:00:00";
+    const close = machine.closeTime ?? "17:00:00";
     return generateSlots(date, open, close, step);
   }, [date, machine]);
 
-  const now = new Date();
-  const isPast = (s: Slot) => s.end < now && date === toISODate(now);
+  const isPast = (s: Slot) =>
+    date === easternDateInputValue() && s.end < new Date();
 
   useEffect(() => {
     let active = true;
@@ -98,6 +101,7 @@ export default function ReserveForm({
         error: userError,
       } = await supabase.auth.getUser();
       if (userError || !user) {
+        if (!active) return;
         setReservations([]);
         setReservationsLoading(false);
         setReservationsError(null);
@@ -121,17 +125,17 @@ export default function ReserveForm({
           data?.map((res) => {
             const startDate = new Date(res.start as string);
             const endDate = res.end ? new Date(res.end as string) : null;
-            const dateLabel = startDate.toLocaleDateString(undefined, {
+            const dateLabel = formatInEastern(startDate, {
               month: "short",
               day: "numeric",
               year: "numeric",
             });
-            const timeLabel = `${startDate.toLocaleTimeString([], {
+            const timeLabel = `${formatInEastern(startDate, {
               hour: "numeric",
               minute: "2-digit",
             })}${
               endDate
-                ? ` - ${endDate.toLocaleTimeString([], {
+                ? ` - ${formatInEastern(endDate, {
                     hour: "numeric",
                     minute: "2-digit",
                   })}`
@@ -157,12 +161,13 @@ export default function ReserveForm({
       active = false;
     };
   }, [supabase]);
+
   useEffect(() => {
     const loadMachineReservations = async () => {
-      if (!machineId || !date) return;
+      if (!machine || !machineId || !date) return;
 
-      const startOfDay = `${date}T00:00:00`;
-      const endOfDay = `${date}T23:59:59`;
+      const startOfDay = zonedDateToUtc(date, "00:00:00").toISOString();
+      const endOfDay = zonedDateToUtc(date, "23:59:59").toISOString();
 
       const { data, error } = await supabase
         .from("reservations")
@@ -175,12 +180,14 @@ export default function ReserveForm({
         console.error("Error loading machine reservations:", error);
         setMachineReservations([]);
       } else {
-        setMachineReservations(data || []);
+        setMachineReservations(
+          (data as { start: string; end: string }[]) || []
+        );
       }
     };
 
     loadMachineReservations();
-  }, [machineId, date]);
+  }, [machineId, date, supabase, machine]);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -193,7 +200,6 @@ export default function ReserveForm({
 
     setLoading(true);
     try {
-      // Get the logged-in user
       const {
         data: { user },
         error: userError,
@@ -259,31 +265,25 @@ export default function ReserveForm({
       }
 
       const fmt = (d: Date) =>
-        d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-
-      setMessage(
-        `✅ Reserved ${eqName} on ${date} from ${fmt(selected.start)} to ${fmt(
-          selected.end
-        )}`
-      );
-      if (inserted) {
-        const insertedStart = new Date(inserted.start);
-        const insertedEnd = inserted.end ? new Date(inserted.end) : null;
-        const dateLabel = insertedStart.toLocaleDateString(undefined, {
+        formatInEastern(d, { hour: "numeric", minute: "2-digit" });
+      const fmtDate = (d: Date) =>
+        formatInEastern(d, {
           month: "short",
           day: "numeric",
           year: "numeric",
         });
-        const timeLabel = `${insertedStart.toLocaleTimeString([], {
-          hour: "numeric",
-          minute: "2-digit",
-        })}${
-          insertedEnd
-            ? ` - ${insertedEnd.toLocaleTimeString([], {
-                hour: "numeric",
-                minute: "2-digit",
-              })}`
-            : ""
+
+      setMessage(
+        `✅ Reserved ${eqName} on ${fmtDate(selected.start)} from ${fmt(
+          selected.start
+        )} to ${fmt(selected.end)}`
+      );
+      if (inserted) {
+        const insertedStart = new Date(inserted.start);
+        const insertedEnd = inserted.end ? new Date(inserted.end) : null;
+        const dateLabel = fmtDate(insertedStart);
+        const timeLabel = `${fmt(insertedStart)}${
+          insertedEnd ? ` - ${fmt(insertedEnd)}` : ""
         }`;
 
         setReservations((prev) => [
@@ -305,6 +305,14 @@ export default function ReserveForm({
     }
   }
 
+  if (!hasEquipment) {
+    return (
+      <div className="text-sm text-gray-500">
+        No equipment available yet. Please check back later.
+      </div>
+    );
+  }
+
   return (
     <form onSubmit={onSubmit} className="space-y-6">
       <div className="grid gap-4 sm:grid-cols-3">
@@ -313,7 +321,7 @@ export default function ReserveForm({
           <input
             type="date"
             value={date}
-            min={toISODate(new Date())}
+            min={easternDateInputValue()}
             onChange={(e) => {
               const newDate = e.target.value;
               const day = new Date(newDate).getDay();
@@ -353,10 +361,10 @@ export default function ReserveForm({
 
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
         {slots.map((s, i) => {
-          const label = `${s.start.toLocaleTimeString([], {
+          const label = `${formatInEastern(s.start, {
             hour: "numeric",
             minute: "2-digit",
-          })}–${s.end.toLocaleTimeString([], {
+          })}–${formatInEastern(s.end, {
             hour: "numeric",
             minute: "2-digit",
           })}`;
