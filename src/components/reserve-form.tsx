@@ -42,8 +42,9 @@ function generateSlots(
   }
   const maxIterations = Math.ceil((24 * 60) / step) + 1;
   const out: Slot[] = [];
-  for (let cur = new Date(start), count = 0; cur < end && count < maxIterations; count++) {
-    const next = new Date(cur.getTime() + step * 60_000);
+  for (let cur = new Date(start); cur < end; ) {
+    const next = new Date(cur.getTime() + stepMinutes * 60_000);
+    if (next > end) break;
     out.push({ start: new Date(cur), end: next });
     cur = next;
   }
@@ -70,9 +71,13 @@ export default function ReserveForm({
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [reservationsLoading, setReservationsLoading] = useState(true);
-  const [reservationsError, setReservationsError] = useState<string | null>(null);
+  const [reservationsError, setReservationsError] = useState<string | null>(
+    null
+  );
   const [reservations, setReservations] = useState<ReservationItem[]>([]);
-  const [machineReservations, setMachineReservations] = useState<{ start: string; end: string }[]>([]);
+  const [machineReservations, setMachineReservations] = useState<
+    { start: string; end: string }[]
+  >([]);
   const supabase = useMemo(() => createBrowserClient(), []);
 
   const slots = useMemo(() => {
@@ -175,7 +180,9 @@ export default function ReserveForm({
         console.error("Error loading machine reservations:", error);
         setMachineReservations([]);
       } else {
-        setMachineReservations((data as { start: string; end: string }[]) || []);
+        setMachineReservations(
+          (data as { start: string; end: string }[]) || []
+        );
       }
     };
 
@@ -267,9 +274,9 @@ export default function ReserveForm({
         });
 
       setMessage(
-        `✅ Reserved ${eqName} on ${fmtDate(
+        `✅ Reserved ${eqName} on ${fmtDate(selected.start)} from ${fmt(
           selected.start
-        )} from ${fmt(selected.start)} to ${fmt(selected.end)}`
+        )} to ${fmt(selected.end)}`
       );
       if (inserted) {
         const insertedStart = new Date(inserted.start);
@@ -316,7 +323,15 @@ export default function ReserveForm({
             value={date}
             min={easternDateInputValue()}
             onChange={(e) => {
-              setDate(e.target.value);
+              const newDate = e.target.value;
+              const day = new Date(newDate).getDay();
+
+              if (day === 5 || day === 6) {
+                setMessage("Reservations are not available on weekends.");
+                return;
+              }
+
+              setDate(newDate);
               setSelected(null);
               setMessage("");
             }}
