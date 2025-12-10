@@ -38,6 +38,7 @@ function generateSlots(
   const out: Slot[] = [];
   for (let cur = new Date(start); cur < end; ) {
     const next = new Date(cur.getTime() + stepMinutes * 60_000);
+    if (next > end) break;
     out.push({ start: new Date(cur), end: next });
     cur = next;
   }
@@ -314,7 +315,15 @@ export default function ReserveForm({
             value={date}
             min={toISODate(new Date())}
             onChange={(e) => {
-              setDate(e.target.value);
+              const newDate = e.target.value;
+              const day = new Date(newDate).getDay();
+
+              if (day === 5 || day === 6) {
+                setMessage("Reservations are not available on weekends.");
+                return;
+              }
+
+              setDate(newDate);
               setSelected(null);
               setMessage("");
             }}
@@ -327,15 +336,7 @@ export default function ReserveForm({
           <select
             value={machineId}
             onChange={(e) => {
-              const newDate = e.target.value;
-              const day = new Date(newDate).getDay();
-
-              if (day === 0 || day === 6) {
-                setMessage("Reservations are not available on weekends.");
-                return;
-              }
-
-              setDate(newDate);
+              setMachineId(e.target.value);
               setSelected(null);
               setMessage("");
             }}
