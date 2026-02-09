@@ -4,6 +4,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/utils/supabase/client";
+import { StatusLight } from "@/components/status-light";
+import { isFacultyOrAdmin } from "@/utils/permissions";
 import type { User } from "@supabase/supabase-js";
 const SearchIcon = () => (
   <svg
@@ -187,12 +189,19 @@ export function Navbar() {
               priority
             />
           </span>
-          <span
-            className="font-heading text-base font-semibold uppercase tracking-wide"
-            style={{ color: "var(--on-primary)" }}
-          >
-            UT MAKERSPACE
-          </span>
+          <div className="flex flex-col">
+            <span
+              className="font-heading text-base font-semibold uppercase tracking-wide"
+              style={{ color: "var(--on-primary)" }}
+            >
+              UT MAKERSPACE
+            </span>
+            <StatusLight 
+              size="sm" 
+              showLabel={true} 
+              className="mt-0.5" 
+            />
+          </div>
         </Link>
         <div className="ml-auto flex items-center gap-4 md:gap-6">
           <button
@@ -319,13 +328,13 @@ export function Navbar() {
                             />
                           </svg>
                         </Link>
-                        {profileRole === "admin" && (
+                        {isFacultyOrAdmin(profileRole) && (
                           <Link
                             href="/admin"
                             className="flex items-center justify-between rounded-lg px-3 py-2 font-semibold text-[var(--secondary)] transition hover:bg-[var(--surface-muted)]"
                             onClick={() => setMenuOpen(false)}
                           >
-                            Admin Dashboard
+                            {profileRole === 'faculty' ? 'Faculty Dashboard' : 'Admin Dashboard'}
                             <svg
                               viewBox="0 0 24 24"
                               fill="none"
@@ -387,9 +396,16 @@ export function Navbar() {
                     height={32}
                   />
                 </span>
-                <span className="font-heading text-base font-semibold uppercase tracking-wide text-[var(--text-primary)]">
-                  UT MAKERSPACE
-                </span>
+                <div className="flex flex-col">
+                  <span className="font-heading text-base font-semibold uppercase tracking-wide text-[var(--text-primary)]">
+                    UT MAKERSPACE
+                  </span>
+                  <StatusLight 
+                    size="sm" 
+                    showLabel={true} 
+                    className="mt-0.5" 
+                  />
+                </div>
               </Link>
               <button
                 type="button"
@@ -433,13 +449,13 @@ export function Navbar() {
                   My Account
                 </Link>
               )}
-              {profileRole === "admin" && (
+              {isFacultyOrAdmin(profileRole) && (
                 <Link
                   href="/admin"
                   className="rounded-lg px-3 py-3 text-sm font-semibold text-[var(--secondary)] transition hover:bg-[var(--surface-muted)]"
                   onClick={() => setMobileOpen(false)}
                 >
-                  Admin Dashboard
+                  {profileRole === 'faculty' ? 'Faculty Dashboard' : 'Admin Dashboard'}
                 </Link>
               )}
             </nav>
