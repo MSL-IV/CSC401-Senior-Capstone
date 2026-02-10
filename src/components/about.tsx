@@ -1,5 +1,6 @@
 "use client";
 
+import React from "react";
 import { Navbar } from "@/components/navbar";
 import  {SiteFooter} from "@/components/site-footer";
 import { FeatureCard } from "@/components/feature-card";
@@ -152,7 +153,7 @@ const faqs: FAQItem[] = [
     },
 ];
 
-export function About() {
+function About() {
     return (
         <div
             className="min-h-screen"
