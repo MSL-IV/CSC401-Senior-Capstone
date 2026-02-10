@@ -5,6 +5,7 @@ export type AdminLink = {
   category: string;
   meta?: string;
   accent?: string;
+  facultyDescription?: string; // Optional alternative description for faculty
 };
 
 export const adminLinks: AdminLink[] = [
@@ -12,6 +13,8 @@ export const adminLinks: AdminLink[] = [
     title: "View Users",
     description:
       "Review sign-ups, roles, training progress, and manage account access.",
+    facultyDescription:
+      "Review sign-ups, training progress, and override certificates for users.",
     href: "/admin/view-users",
     category: "People",
     meta: "Roster, status, certifications",

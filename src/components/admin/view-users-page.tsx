@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/utils/supabase/client";
+import { canModifyUserRoles, isFacultyOrAdmin, UserRole } from "@/utils/permissions";
 
 type UserStatus = "active" | "pending" | "suspended";
 type UserRole = "student" | "faculty" | "admin";
@@ -71,6 +72,34 @@ export function ViewUsersPage() {
   const [roleFilter, setRoleFilter] = useState<"all" | UserRole>("all");
   const [managingUserId, setManagingUserId] = useState<string | null>(null);
   const [certCounts, setCertCounts] = useState<Record<string, { count: number; machines: string[] }>>({});
+  const [currentUserRole, setCurrentUserRole] = useState<UserRole | null>(null);
+
+  // Fetch current user role
+  async function fetchCurrentUserRole() {
+    try {
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      if (authError || !user) {
+        setError('Authentication required');
+        return;
+      }
+
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single();
+
+      if (profileError) {
+        setError('Failed to fetch user role');
+        return;
+      }
+
+      setCurrentUserRole(profile?.role || 'student');
+    } catch (err) {
+      console.error('Error fetching current user role:', err);
+      setError('Failed to fetch user role');
+    }
+  }
 
   // Fetch users from database
   async function fetchUsers() {
@@ -215,6 +244,7 @@ export function ViewUsersPage() {
   useEffect(() => {
     async function loadUsers() {
       setLoading(true);
+      await fetchCurrentUserRole();
       await fetchUsers();
       await fetchTrainingCounts();
       setLoading(false);
@@ -241,6 +271,62 @@ export function ViewUsersPage() {
     const success = await updateUser(userId, { role: newRole });
     if (success) {
       setManagingUserId(null);
+    }
+  };
+
+  const handleOverrideCertificates = async (userId: string) => {
+    setUpdateLoading(userId);
+    try {
+      // Get all available machines
+      const { data: machines, error: machinesError } = await supabase
+        .from('machines')
+        .select('id, name');
+
+      if (machinesError) {
+        setError('Failed to fetch machines: ' + machinesError.message);
+        return;
+      }
+
+      // Delete existing certificates for this user
+      const { error: deleteError } = await supabase
+        .from('training_certificates')
+        .delete()
+        .eq('user_id', userId);
+
+      if (deleteError) {
+        setError('Failed to clear existing certificates: ' + deleteError.message);
+        return;
+      }
+
+      // Insert new certificates for all machines
+      const certificates = machines?.map(machine => ({
+        user_id: userId,
+        machine_name: machine.name,
+        completed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        issued_by: 'faculty_override'
+      })) || [];
+
+      if (certificates.length > 0) {
+        const { error: insertError } = await supabase
+          .from('training_certificates')
+          .insert(certificates);
+
+        if (insertError) {
+          setError('Failed to create certificates: ' + insertError.message);
+          return;
+        }
+      }
+
+      // Refresh certificate counts
+      await fetchTrainingCounts();
+      setManagingUserId(null);
+      
+    } catch (err: any) {
+      console.error('Error overriding certificates:', err);
+      setError('Failed to override certificates: ' + err.message);
+    } finally {
+      setUpdateLoading(null);
     }
   };
 
@@ -505,14 +591,16 @@ export function ViewUsersPage() {
                       {user.lastActive}
                     </td>
                     <td className="px-4 py-4 text-right">
-                      <button
-                        type="button"
-                        onClick={() => setManagingUserId(user.id)}
-                        disabled={updateLoading === user.id}
-                        className={`rounded-full border border-[var(--border)] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)] transition hover:border-[var(--secondary)] hover:text-[var(--text-primary)] ${updateLoading === user.id ? 'opacity-50 cursor-not-allowed' : ''}`}
-                      >
-                        {updateLoading === user.id ? 'Updating...' : 'Manage'}
-                      </button>
+                      {isFacultyOrAdmin(currentUserRole) && (
+                        <button
+                          type="button"
+                          onClick={() => setManagingUserId(user.id)}
+                          disabled={updateLoading === user.id}
+                          className={`rounded-full border border-[var(--border)] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)] transition hover:border-[var(--secondary)] hover:text-[var(--text-primary)] ${updateLoading === user.id ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        >
+                          {updateLoading === user.id ? 'Updating...' : 'Manage'}
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -542,52 +630,72 @@ export function ViewUsersPage() {
                     Manage {user.name}
                   </h3>
                   <div className="space-y-4">
-                    <div>
-                      <p className="text-sm text-gray-600 mb-2">Status</p>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => handleActivateUser(user.id)}
-                          disabled={updateLoading === user.id}
-                          className="px-3 py-2 text-sm bg-emerald-100 text-emerald-700 rounded hover:bg-emerald-200 disabled:opacity-50"
-                        >
-                          Activate
-                        </button>
-                        <button
-                          onClick={() => handleSuspendUser(user.id)}
-                          disabled={updateLoading === user.id}
-                          className="px-3 py-2 text-sm bg-red-100 text-red-700 rounded hover:bg-red-200 disabled:opacity-50"
-                        >
-                          Suspend
-                        </button>
+                    {canModifyUserRoles(currentUserRole) && (
+                      <div>
+                        <p className="text-sm text-gray-600 mb-2">Status</p>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleActivateUser(user.id)}
+                            disabled={updateLoading === user.id}
+                            className="px-3 py-2 text-sm bg-emerald-100 text-emerald-700 rounded hover:bg-emerald-200 disabled:opacity-50"
+                          >
+                            Activate
+                          </button>
+                          <button
+                            onClick={() => handleSuspendUser(user.id)}
+                            disabled={updateLoading === user.id}
+                            className="px-3 py-2 text-sm bg-red-100 text-red-700 rounded hover:bg-red-200 disabled:opacity-50"
+                          >
+                            Suspend
+                          </button>
+                        </div>
                       </div>
-                    </div>
+                    )}
                     
-                    <div>
-                      <p className="text-sm text-gray-600 mb-2">Role</p>
-                      <div className="flex gap-2">
+                    {canModifyUserRoles(currentUserRole) && (
+                      <div>
+                        <p className="text-sm text-gray-600 mb-2">Role</p>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleChangeRole(user.id, 'student')}
+                            disabled={updateLoading === user.id}
+                            className="px-3 py-2 text-sm bg-blue-100 text-blue-700 rounded hover:bg-blue-200 disabled:opacity-50"
+                          >
+                            Student
+                          </button>
+                          <button
+                            onClick={() => handleChangeRole(user.id, 'faculty')}
+                            disabled={updateLoading === user.id}
+                            className="px-3 py-2 text-sm bg-purple-100 text-purple-700 rounded hover:bg-purple-200 disabled:opacity-50"
+                          >
+                            Faculty
+                          </button>
+                          <button
+                            onClick={() => handleChangeRole(user.id, 'admin')}
+                            disabled={updateLoading === user.id}
+                            className="px-3 py-2 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200 disabled:opacity-50"
+                          >
+                            Admin
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {isFacultyOrAdmin(currentUserRole) && (
+                      <div>
+                        <p className="text-sm text-gray-600 mb-2">Training Certificates</p>
+                        <div className="text-xs text-gray-500 mb-2">
+                          Current: {certCounts[user.id]?.count || 0} certificates for {certCounts[user.id]?.machines.join(', ') || 'none'}
+                        </div>
                         <button
-                          onClick={() => handleChangeRole(user.id, 'student')}
+                          onClick={() => handleOverrideCertificates(user.id)}
                           disabled={updateLoading === user.id}
-                          className="px-3 py-2 text-sm bg-blue-100 text-blue-700 rounded hover:bg-blue-200 disabled:opacity-50"
+                          className="px-3 py-2 text-sm bg-yellow-100 text-yellow-700 rounded hover:bg-yellow-200 disabled:opacity-50"
                         >
-                          Student
-                        </button>
-                        <button
-                          onClick={() => handleChangeRole(user.id, 'faculty')}
-                          disabled={updateLoading === user.id}
-                          className="px-3 py-2 text-sm bg-purple-100 text-purple-700 rounded hover:bg-purple-200 disabled:opacity-50"
-                        >
-                          Faculty
-                        </button>
-                        <button
-                          onClick={() => handleChangeRole(user.id, 'admin')}
-                          disabled={updateLoading === user.id}
-                          className="px-3 py-2 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200 disabled:opacity-50"
-                        >
-                          Admin
+                          Override All Certificates
                         </button>
                       </div>
-                    </div>
+                    )}
 
                     <div className="flex justify-end gap-2 pt-4 border-t">
                       <button

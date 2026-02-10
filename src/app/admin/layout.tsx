@@ -2,13 +2,14 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/utils/supabase/server";
 import { adminLinks } from "@/data/admin-links";
+import { isFacultyOrAdmin } from "@/utils/permissions";
 
 type AdminProfile = {
   role?: string | null;
   full_name?: string | null;
 };
 
-async function requireAdmin() {
+async function requireAdminOrFaculty() {
   const supabase = await createClient();
 
   const {
@@ -26,7 +27,7 @@ async function requireAdmin() {
     .eq("id", user.id)
     .single();
 
-  if (profileError || profile?.role !== "admin") {
+  if (profileError || (profile?.role !== "admin" && profile?.role !== "faculty")) {
     redirect("/");
   }
 
@@ -49,7 +50,7 @@ export default async function AdminLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { profile, displayName } = await requireAdmin();
+  const { profile, displayName } = await requireAdminOrFaculty();
 
   return (
     <div
