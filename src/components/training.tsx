@@ -20,16 +20,31 @@ type TrainingCertificate = {
     updated_at: string | null;
 };
 
+type TrainingMachine = {
+    id: string;
+    name: string;
+    slug: string;
+    active?: boolean | null;
+    needs_training?: boolean | null;
+    display_order?: number | null;
+};
+
+const FALLBACK_EQUIPMENT: TrainingMachine[] = [
+    { id: "laser-cutter", name: "Laser Cutter", slug: "laser-cutter", display_order: 1 },
+    { id: "milling-machine", name: "Milling Machine", slug: "milling-machine", display_order: 2 },
+    { id: "3d-printer", name: "3D Printer", slug: "3d-printer", display_order: 3 },
+    { id: "ultimaker", name: "UltiMaker", slug: "ultimaker", display_order: 4 },
+    { id: "heat-press", name: "Heat Press", slug: "heat-press", display_order: 5 },
+    { id: "vinyl-cutter", name: "Vinyl Cutter", slug: "vinyl-cutter", display_order: 6 },
+    { id: "soldering-station", name: "Soldering Station", slug: "soldering-station", display_order: 7 },
+];
+
 const supabase = createClient();
 
 export function Training() {
 
-    const equipment = [
-        { id: "3dp", name: "3D Printer" },
-        { id: "laser", name: "Laser Cutter" },
-        { id: "solder", name: "Soldering Board" },
-    ];
-
+    const [equipment, setEquipment] = useState<TrainingMachine[]>(FALLBACK_EQUIPMENT);
+    const [loadingEquipment, setLoadingEquipment] = useState(false);
     const [selectedEquipment, setSelectedEquipment] = useState("");
     const [activeEquipment, setActiveEquipment] = useState("");
     const [certificateUnlocked, setCertificateUnlocked] = useState(false);
@@ -53,6 +68,36 @@ export function Training() {
             setIssuedBy(data.user.email ?? data.user.id ?? null);
         }
         loadUser();
+    }, []);
+
+    useEffect(() => {
+        async function loadEquipment() {
+            setLoadingEquipment(true);
+            const { data, error } = await supabase
+                .from("training_machines")
+                .select("id, name, slug, active, needs_training, display_order")
+                .eq("needs_training", true)
+                .order("display_order", { ascending: true });
+
+            if (error) {
+                console.error("Failed to load training machines:", error.message);
+                setEquipment(FALLBACK_EQUIPMENT);
+            } else if (data && data.length > 0) {
+                // Prefer explicit ordering, fallback alphabetical
+                const sorted = [...data].sort((a, b) => {
+                    const ao = a.display_order ?? 999;
+                    const bo = b.display_order ?? 999;
+                    if (ao === bo) return a.name.localeCompare(b.name);
+                    return ao - bo;
+                });
+                setEquipment(sorted as TrainingMachine[]);
+            } else {
+                setEquipment(FALLBACK_EQUIPMENT);
+            }
+            setLoadingEquipment(false);
+        }
+
+        loadEquipment();
     }, []);
 
     useEffect(() => {
@@ -252,8 +297,9 @@ export function Training() {
                             value={selectedEquipment}
                             onChange={(e) => setSelectedEquipment(e.target.value)}
                             className="w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-4 py-2 text-sm text-[var(--text-primary)] shadow-sm focus:border-[var(--primary)] focus:ring-2 focus:ring-[rgba(200,16,46,0.2)]"
+                            disabled={loadingEquipment}
                         >
-                            <option value="">-- Choose Equipment --</option>
+                            <option value="">{loadingEquipment ? "Loading equipment..." : "-- Choose Equipment --"}</option>
                             {equipment.map((eq) => (
                                 <option key={eq.id} value={eq.name}>
                                     {eq.name}
@@ -262,9 +308,10 @@ export function Training() {
                         </select>
                         <button
                             onClick={handleSearch}
-                            className="mt-4 w-full rounded-lg bg-[var(--primary)] px-4 py-2 text-white shadow hover:bg-[var(--primary-hover)]"
+                            disabled={loadingEquipment}
+                            className={`mt-4 w-full rounded-lg bg-[var(--primary)] px-4 py-2 text-white shadow hover:bg-[var(--primary-hover)] ${loadingEquipment ? "opacity-70" : ""}`}
                         >
-                            Go
+                            {loadingEquipment ? "Please wait" : "Go"}
                         </button>
                     </div>
 

@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/utils/supabase/client";
 import { easternDateInputValue, formatInEastern } from "@/utils/time";
@@ -31,14 +30,26 @@ type ActiveReservation = {
   user_id: string;
 };
 
+type ActiveCheckout = {
+  id: string;
+  equipment_id: string | null;
+  name: string;
+  user_id: string | null;
+  status: string | null;
+  notes?: string | null;
+  created_at: string;
+  returned_at?: string | null;
+};
+
 const supabase = createClient();
 
 export function EquipmentManagementPage() {
   const [equipment, setEquipment] = useState<EquipmentItem[]>([]);
-  const [reservations, setReservations] = useState<ActiveReservation[]>([]);
+  const [checkouts, setCheckouts] = useState<ActiveCheckout[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [updateLoading, setUpdateLoading] = useState<string | null>(null);
+  const [returnLoading, setReturnLoading] = useState<string | null>(null);
 
   async function fetchEquipment() {
     try {
@@ -59,38 +70,54 @@ export function EquipmentManagementPage() {
     }
   }
 
-  async function fetchReservations() {
+  async function fetchCheckouts() {
     try {
       const { data, error } = await supabase
-        .from('reservations')
+        .from('equipment_in_use')
         .select('*')
-        .order('start');
+        .neq('status', 'returned')
+        .order('created_at', { ascending: false });
 
       if (error) {
-        setError('Failed to fetch reservations: ' + error.message);
+        setError('Failed to fetch equipment in use: ' + error.message);
         return;
       }
 
-      const now = new Date();
-      const activeReservations = (data || []).filter(res => {
-        const startTime = new Date(res.start);
-        const endTime = new Date(res.end);
-        return startTime <= now && endTime >= now;
-      });
-
-      setReservations(activeReservations as ActiveReservation[]);
+      setCheckouts((data || []) as ActiveCheckout[]);
     } catch (err) {
-      setError('An unexpected error occurred while fetching reservations');
-      console.error('Reservations fetch error:', err);
+      setError('An unexpected error occurred while fetching equipment in use');
+      console.error('Equipment-in-use fetch error:', err);
     }
   }
+
+  const handleReturn = async (checkoutId: string) => {
+    setReturnLoading(checkoutId);
+    try {
+      const { error } = await supabase
+        .from("equipment_in_use")
+        .update({ status: "returned", returned_at: new Date().toISOString() })
+        .eq("id", checkoutId);
+
+      if (error) {
+        setError("Failed to mark returned: " + error.message);
+        return;
+      }
+
+      setCheckouts((prev) => prev.filter((c) => c.id !== checkoutId));
+    } catch (err) {
+      setError("Unexpected error while returning equipment");
+      console.error("Return error:", err);
+    } finally {
+      setReturnLoading(null);
+    }
+  };
 
   useEffect(() => {
     async function loadData() {
       setLoading(true);
       await Promise.all([
         fetchEquipment(),
-        fetchReservations()
+        fetchCheckouts()
       ]);
       setLoading(false);
     }
@@ -101,14 +128,14 @@ export function EquipmentManagementPage() {
   const summary = useMemo(() => {
     const total = equipment.length;
     const available = equipment.filter((item) => item.active === true).length;
-    const inUse = reservations.length;
+    const inUse = checkouts.length;
     return {
       total,
       available,
       unavailable: total - available,
       inUse,
     };
-  }, [equipment, reservations]);
+  }, [equipment, checkouts]);
 
   const toggleEquipmentStatus = async (id: string) => {
     setUpdateLoading(id);
@@ -388,83 +415,65 @@ export function EquipmentManagementPage() {
                 Equipment In Use
               </h2>
               <p className="text-sm text-[var(--text-secondary)]">
-                Track who is currently on the machines and intervene if a session
-                runs long.
+                Track active check-outs across tools and consumables.
               </p>
             </div>
-            <Link
-              href="/admin/schedule"
-              className="rounded-[var(--radius-button)] border border-[var(--border)] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)] transition hover:border-[var(--secondary)] hover:text-[var(--text-primary)]"
-            >
-              View schedule
-            </Link>
           </div>
           <div className="grid gap-4 md:grid-cols-3">
-            {reservations.map((reservation) => (
+            {checkouts.map((checkout) => (
               <article
-                key={reservation.reservation_id}
+                key={checkout.id}
                 className="rounded-2xl border border-[var(--border)] p-4"
               >
                 <p className="text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)]">
-                  {reservation.machine}
+                  {checkout.equipment_id ? "Catalog Item" : "Other"}
                 </p>
                 <p className="mt-2 font-heading text-lg font-semibold text-[var(--text-primary)]">
-                  {reservation.name}
+                  {checkout.name}
                 </p>
-                <p className="text-sm text-[var(--text-secondary)]">
-                  {reservation.email}
-                </p>
+                {checkout.notes && (
+                  <p className="text-sm text-[var(--text-secondary)]">
+                    {checkout.notes}
+                  </p>
+                )}
                 <dl className="mt-4 space-y-2 text-sm text-[var(--text-secondary)]">
                   <div className="flex items-center justify-between">
                     <dt>Started</dt>
                     <dd className="font-semibold text-[var(--text-primary)]">
-                      {formatTime(reservation.start)}
-                    </dd>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <dt>Expected End</dt>
-                    <dd className="font-semibold text-[var(--text-primary)]">
-                      {formatTime(reservation.end)}
+                      {formatTime(checkout.created_at)}
                     </dd>
                   </div>
                   <div className="flex items-center justify-between">
                     <dt>Status</dt>
                     <dd>
-                      <span
-                        className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold ${
-                          new Date(reservation.end) >= new Date()
-                            ? "bg-emerald-50 text-emerald-700"
-                            : "bg-amber-50 text-amber-700"
-                        }`}
-                      >
-                        <span
-                          className={`h-2 w-2 rounded-full ${
-                            new Date(reservation.end) >= new Date()
-                              ? "bg-emerald-500"
-                              : "bg-amber-500"
-                          }`}
-                        />
-                        {new Date(reservation.end) >= new Date() ? "On schedule" : "Overdue"}
+                      <span className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold bg-amber-50 text-amber-700">
+                        <span className="h-2 w-2 rounded-full bg-amber-500" />
+                        In use
                       </span>
                     </dd>
                   </div>
                 </dl>
-                <div className="mt-4 flex gap-2">
+                <div className="mt-4 flex justify-end">
                   <button
                     type="button"
-                    className="flex-1 rounded-[var(--radius-button)] bg-[var(--secondary)] px-3 py-2 text-xs font-semibold uppercase tracking-wide text-white transition hover:bg-[var(--secondary-accent)]"
+                    onClick={() => handleReturn(checkout.id)}
+                    disabled={returnLoading === checkout.id}
+                    className={`rounded-[var(--radius-button)] px-3 py-2 text-xs font-semibold uppercase tracking-wide text-white ${
+                      returnLoading === checkout.id
+                        ? "bg-[var(--primary)]/60"
+                        : "bg-emerald-600 hover:bg-emerald-700"
+                    }`}
                   >
-                    Send Reminder
-                  </button>
-                  <button
-                    type="button"
-                    className="rounded-[var(--radius-button)] border border-[var(--border)] px-3 py-2 text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)] transition hover:border-[var(--secondary)] hover:text-[var(--text-primary)]"
-                  >
-                    End Session
+                    {returnLoading === checkout.id ? "Marking..." : "Mark Returned"}
                   </button>
                 </div>
               </article>
             ))}
+            {checkouts.length === 0 && (
+              <div className="rounded-2xl border border-dashed border-[var(--border)] p-4 text-sm text-[var(--text-secondary)]">
+                No active equipment check-outs right now.
+              </div>
+            )}
           </div>
         </section>
       </div>
