@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/utils/supabase/client";
-import { canModifyUserRoles, isFacultyOrAdmin, UserRole } from "@/utils/permissions";
+import { canModifyUserRoles, isFacultyOrAdmin } from "@/utils/permissions";
 
 type UserStatus = "active" | "pending" | "suspended";
 type UserRole = "student" | "faculty" | "admin";

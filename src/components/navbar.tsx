@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/utils/supabase/client";
 import { StatusLight } from "@/components/status-light";
-import { isFacultyOrAdmin } from "@/utils/permissions";
+import { isFacultyOrAdmin, type UserRole } from "@/utils/permissions";
 import type { User } from "@supabase/supabase-js";
 const SearchIcon = () => (
   <svg
@@ -53,7 +53,7 @@ const navLinks = [
 export function Navbar() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const [profileRole, setProfileRole] = useState<string | null>(null);
+  const [profileRole, setProfileRole] = useState<UserRole | null>(null);
   const [profileLoading, setProfileLoading] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
