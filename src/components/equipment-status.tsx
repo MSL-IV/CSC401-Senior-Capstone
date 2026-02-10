@@ -387,10 +387,14 @@ export function EquipmentStatus() {
       };
 
       setCheckouts((prev) => [newCheckout, ...prev]);
-      setEquipmentStatuses((prev) => {
-        const updated = prev.map((item) =>
+      setEquipmentStatuses((prev): EquipmentStatus[] => {
+        const updated: EquipmentStatus[] = prev.map((item) =>
           item.id === equipment.id
-            ? { ...item, status: "In Use", statusDetail: "Checked out by you" }
+            ? {
+                ...item,
+                status: "In Use" as const,
+                statusDetail: "Checked out by you",
+              }
             : item
         );
         // If the item was only from placeholders and not in state, add it so UI swaps out of fallback list
@@ -401,7 +405,7 @@ export function EquipmentStatus() {
               ...updated,
               {
                 ...equipment,
-                status: "In Use",
+                status: "In Use" as const,
                 statusDetail: "Checked out by you",
               },
             ];
