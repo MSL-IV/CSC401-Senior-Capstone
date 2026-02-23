@@ -70,6 +70,12 @@ export default async function AdminDashboardPage() {
                 {item.label}: {item.value}
               </span>
             ))}
+            <Link
+              href="/admin/kiosk"
+              className="rounded-full border border-[var(--border)] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-[var(--secondary)] transition hover:border-[var(--secondary)] hover:text-[var(--text-primary)]"
+            >
+              Open Kiosk
+            </Link>
           </div>
         </div>
       </section>
