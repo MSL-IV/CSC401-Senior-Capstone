@@ -24,6 +24,15 @@ type ReservationItem = {
   time: string;
 };
 
+function canonicalMachineName(name: string): string {
+  return name
+    .trim()
+    .replace(/\s*\(\d+\)\s*$/i, "")
+    .replace(/\s*[-_#]?\s*\d+\s*$/i, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function generateSlots(
   day: string,
   openTime = "09:00:00",
@@ -179,12 +188,14 @@ export default function ReserveForm({
         return;
       }
 
-      // Query training table
+      const exactName = machine?.name ?? "";
+      const canonicalName = canonicalMachineName(exactName);
+
+      // Query all user certs, then match canonically so numbered variants share one training
       const { data, error } = await supabase
         .from("training_certificates")
-        .select("expires_at")
-        .eq("user_id", user.id)
-        .eq("machine_name", machine?.name);
+        .select("expires_at, machine_name")
+        .eq("user_id", user.id);
 
       if (error) {
         console.error("Training check error:", error);
@@ -200,12 +211,14 @@ export default function ReserveForm({
       }
 
       // Training expiration check
-      const cert = data[0];
-      if (cert.expires_at && new Date(cert.expires_at) < new Date()) {
-        setIsAuthorized(false);
-      } else {
-        setIsAuthorized(true);
-      }
+      const hasValidCert = data.some((cert) => {
+        const certCanonical = canonicalMachineName(cert.machine_name ?? "");
+        if (certCanonical !== canonicalName) return false;
+        if (!cert.expires_at) return true;
+        return new Date(cert.expires_at) >= new Date();
+      });
+
+      setIsAuthorized(hasValidCert);
 
       setCheckingTraining(false);
     };
