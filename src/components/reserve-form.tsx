@@ -1,21 +1,21 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { createClient as createBrowserClient } from "@/utils/supabase/client";
 import {
   easternDateInputValue,
   formatInEastern,
   zonedDateToUtc,
 } from "@/utils/time";
-
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 type Equip = {
   id: string;
   name: string;
+  machineUrl: string;
   slotMinutes: number;
   openTime: string;
   closeTime: string;
 };
-type Slot = { start: Date; end: Date };
 
 type ReservationItem = {
   id: string;
@@ -23,7 +23,6 @@ type ReservationItem = {
   date: string;
   time: string;
 };
-
 function canonicalMachineName(name: string): string {
   return name
     .trim()
@@ -31,33 +30,6 @@ function canonicalMachineName(name: string): string {
     .replace(/\s*[-_#]?\s*\d+\s*$/i, "")
     .replace(/\s+/g, " ")
     .trim();
-}
-
-function generateSlots(
-  day: string,
-  openTime = "09:00:00",
-  closeTime = "17:00:00",
-  stepMinutes = 30
-): Slot[] {
-  const start = zonedDateToUtc(day, openTime);
-  const end = zonedDateToUtc(day, closeTime);
-  const step = Math.max(1, stepMinutes || 30);
-  if (
-    Number.isNaN(start.getTime()) ||
-    Number.isNaN(end.getTime()) ||
-    end <= start
-  ) {
-    return [];
-  }
-  const maxIterations = Math.ceil((24 * 60) / step) + 1;
-  const out: Slot[] = [];
-  for (let cur = new Date(start); cur < end; ) {
-    const next = new Date(cur.getTime() + stepMinutes * 60_000);
-    if (next > end) break;
-    out.push({ start: new Date(cur), end: next });
-    cur = next;
-  }
-  return out;
 }
 
 export default function ReserveForm({
@@ -70,18 +42,28 @@ export default function ReserveForm({
   const hasEquipment = equipment && equipment.length > 0;
 
   const [date, setDate] = useState(() => easternDateInputValue());
-  const [machineId, setMachineId] = useState(() => equipment[0]?.id ?? "");
+  const [machineId, setMachineId] = useState("");
   const machine = useMemo(
-    () => equipment.find((e) => e.id === machineId) ?? equipment[0] ?? null,
-    [machineId, equipment]
+    () => equipment.find((e) => e.id === machineId) ?? null,
+    [machineId, equipment],
   );
 
-  const [selected, setSelected] = useState<Slot | null>(null);
+  const [startHour, setStartHour] = useState("9");
+  const [startMinute, setStartMinute] = useState("00");
+  const [startPeriod, setStartPeriod] = useState<"AM" | "PM">("AM");
+  const [durationValue, setDurationValue] = useState(30);
+  const [durationUnit, setDurationUnit] = useState<"min" | "hr">("min");
+  const durationMin = useMemo(() => {
+    const v = Number(durationValue);
+    if (!Number.isFinite(v) || v <= 0) return 0;
+    return durationUnit === "hr" ? v * 60 : v;
+  }, [durationValue, durationUnit]);
+
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [reservationsLoading, setReservationsLoading] = useState(true);
   const [reservationsError, setReservationsError] = useState<string | null>(
-    null
+    null,
   );
   const [reservations, setReservations] = useState<ReservationItem[]>([]);
   const [machineReservations, setMachineReservations] = useState<
@@ -92,16 +74,27 @@ export default function ReserveForm({
 
   const supabase = useMemo(() => createBrowserClient(), []);
 
-  const slots = useMemo(() => {
-    if (!machine) return [];
-    const step = machine.slotMinutes ?? 30;
-    const open = machine.openTime ?? "09:00:00";
-    const close = machine.closeTime ?? "17:00:00";
-    return generateSlots(date, open, close, step);
-  }, [date, machine]);
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+  const didInitUrlSync = useRef(false);
+  const trainingReqId = useRef(0);
 
-  const isPast = (s: Slot) =>
-    date === easternDateInputValue() && s.end < new Date();
+  useEffect(() => {
+    const machineURL = searchParams.get("machine");
+    if (!machineURL) return;
+
+    const match = equipment.find((m) => m.machineUrl === machineURL);
+    if (!match) return;
+
+    if (match.id !== machineId) {
+      setMachineId(match.id);
+      setCheckingTraining(true);
+      setIsAuthorized(null);
+      checkTraining(match.name);
+      setMessage("");
+    }
+  }, [searchParams, equipment, machineId]);
 
   useEffect(() => {
     let active = true;
@@ -155,7 +148,7 @@ export default function ReserveForm({
             }`;
             return {
               id: String(
-                res.reservation_id ?? res.start ?? crypto.randomUUID()
+                res.reservation_id ?? res.start ?? crypto.randomUUID(),
               ),
               title: res.machine ?? "Reservation",
               date: dateLabel,
@@ -173,59 +166,54 @@ export default function ReserveForm({
       active = false;
     };
   }, [supabase]);
-  useEffect(() => {
-    const checkTraining = async () => {
-      setCheckingTraining(true);
-      setIsAuthorized(null);
 
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+  async function checkTraining(machineName: string) {
+    const reqId = ++trainingReqId.current;
 
-      if (!user) {
-        setIsAuthorized(false);
-        setCheckingTraining(false);
-        return;
-      }
+    setCheckingTraining(true);
+    setIsAuthorized(null);
 
-      const exactName = machine?.name ?? "";
-      const canonicalName = canonicalMachineName(exactName);
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
-      // Query all user certs, then match canonically so numbered variants share one training
-      const { data, error } = await supabase
-        .from("training_certificates")
-        .select("expires_at, machine_name")
-        .eq("user_id", user.id);
+    if (reqId !== trainingReqId.current) return false;
 
-      if (error) {
-        console.error("Training check error:", error);
-        setIsAuthorized(false);
-        setCheckingTraining(false);
-        return;
-      }
-
-      if (!data || data.length === 0) {
-        setIsAuthorized(false);
-        setCheckingTraining(false);
-        return;
-      }
-
-      // Training expiration check
-      const hasValidCert = data.some((cert) => {
-        const certCanonical = canonicalMachineName(cert.machine_name ?? "");
-        if (certCanonical !== canonicalName) return false;
-        if (!cert.expires_at) return true;
-        return new Date(cert.expires_at) >= new Date();
-      });
-
-      setIsAuthorized(hasValidCert);
-
+    if (!user) {
+      setIsAuthorized(false);
       setCheckingTraining(false);
-    };
+      return false;
+    }
 
-    if (machine) checkTraining();
-  }, [machineId, machine]);
+    const canonicalName = canonicalMachineName(machineName);
 
+    const { data, error } = await supabase
+      .from("training_certificates")
+      .select("expires_at, machine_name")
+      .eq("user_id", user.id);
+
+    if (reqId !== trainingReqId.current) return false;
+
+    if (error) {
+      console.error("Training check error:", error);
+      setIsAuthorized(false);
+      setCheckingTraining(false);
+      return false;
+    }
+
+    const hasValidCert = (data ?? []).some((cert) => {
+      const certCanonical = canonicalMachineName(cert.machine_name ?? "");
+      if (certCanonical !== canonicalName) return false;
+      if (!cert.expires_at) return true;
+      return new Date(cert.expires_at) >= new Date();
+    });
+
+    if (reqId !== trainingReqId.current) return false;
+
+    setIsAuthorized(hasValidCert);
+    setCheckingTraining(false);
+    return hasValidCert;
+  }
   useEffect(() => {
     const loadMachineReservations = async () => {
       if (!machine || !machineId || !date) return;
@@ -236,7 +224,7 @@ export default function ReserveForm({
       const { data, error } = await supabase
         .from("reservations")
         .select("start, end")
-        .eq("machine", machine.name) // machine stored as name in DB
+        .eq("machine", machine.name)
         .gte("start", startOfDay)
         .lte("start", endOfDay);
 
@@ -245,20 +233,41 @@ export default function ReserveForm({
         setMachineReservations([]);
       } else {
         setMachineReservations(
-          (data as { start: string; end: string }[]) || []
+          (data as { start: string; end: string }[]) || [],
         );
       }
     };
 
     loadMachineReservations();
   }, [machineId, date, supabase, machine]);
+  function to24Hour(hourStr: string, minuteStr: string, period: "AM" | "PM") {
+    let h = Number(hourStr);
+    let m = Number(minuteStr);
 
+    if (!Number.isFinite(h) || h < 1 || h > 12) h = 12;
+    if (!Number.isFinite(m) || m < 0 || m > 59) m = 0;
+
+    if (period === "AM") {
+      if (h === 12) h = 0;
+    } else {
+      if (h !== 12) h += 12;
+    }
+
+    const hh = String(h).padStart(2, "0");
+    const mm = String(m).padStart(2, "0");
+    return `${hh}:${mm}`;
+  }
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setMessage("");
 
-    if (!date || !machineId || !selected || !machine) {
-      setMessage("Please choose a date, equipment, and a time slot.");
+    if (!date || !machineId || !machine) {
+      setMessage("Please choose a date and equipment.");
+      return;
+    }
+
+    if (!startHour || !startMinute || !startPeriod || durationMin <= 0) {
+      setMessage("Please choose a start time and duration.");
       return;
     }
 
@@ -273,13 +282,49 @@ export default function ReserveForm({
         setMessage("You must be logged in to make a reservation.");
         return;
       }
+      const eqName = machine?.name ?? "Machine";
+      const startTime24 = to24Hour(startHour, startMinute, startPeriod);
+      const start = zonedDateToUtc(date, `${startTime24}:00`);
+      const end = new Date(start.getTime() + durationMin * 60_000);
 
-      const startISO = selected.start.toISOString();
-      const endISO = selected.end.toISOString();
-      const duration = machine.slotMinutes;
-      const eqName =
-        equipment.find((e) => e.id === machineId)?.name ?? machineId;
+      if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+        setMessage("Invalid start time or duration.");
+        return;
+      }
+      const open = zonedDateToUtc(date, machine.openTime ?? "09:00:00");
+      const close = zonedDateToUtc(date, machine.closeTime ?? "17:00:00");
 
+      if (start < open) {
+        setMessage("Start time is before the machine opens.");
+        return;
+      }
+      if (end > close) {
+        setMessage("This reservation would end after closing time.");
+        return;
+      }
+      if (end <= start) {
+        setMessage("End time must be after start time.");
+        return;
+      }
+      if (date === easternDateInputValue() && end < new Date()) {
+        setMessage("That reservation time is in the past.");
+        return;
+      }
+      const overlapsExisting = machineReservations.some((r) => {
+        const rStart = new Date(r.start);
+        const rEnd = new Date(r.end);
+        return start < rEnd && end > rStart;
+      });
+
+      if (overlapsExisting) {
+        setMessage(
+          "That time overlaps an existing reservation. Try another time.",
+        );
+        return;
+      }
+      const startISO = start.toISOString();
+      const endISO = end.toISOString();
+      const duration = durationMin;
       const { data: profile } = await supabase
         .from("profiles")
         .select("first_name, last_name, email")
@@ -319,7 +364,7 @@ export default function ReserveForm({
           error.details?.includes("reservations_no_overlap")
         ) {
           setMessage(
-            "That time slot is already booked for this machine. Please choose another time."
+            "That time slot is already booked for this machine. Please choose another time.",
           );
           return;
         }
@@ -338,9 +383,7 @@ export default function ReserveForm({
         });
 
       setMessage(
-        `✅ Reserved ${eqName} on ${fmtDate(selected.start)} from ${fmt(
-          selected.start
-        )} to ${fmt(selected.end)}`
+        `✅ Reserved ${eqName} on ${fmtDate(start)} from ${fmt(start)} to ${fmt(end)}`,
       );
       if (inserted) {
         const insertedStart = new Date(inserted.start);
@@ -353,7 +396,7 @@ export default function ReserveForm({
         setReservations((prev) => [
           {
             id: String(
-              inserted.reservation_id ?? inserted.start ?? crypto.randomUUID()
+              inserted.reservation_id ?? inserted.start ?? crypto.randomUUID(),
             ),
             title: inserted.machine ?? eqName,
             date: dateLabel,
@@ -363,7 +406,6 @@ export default function ReserveForm({
         ]);
         onReservationCreated?.();
       }
-      setSelected(null);
     } finally {
       setLoading(false);
     }
@@ -396,7 +438,6 @@ export default function ReserveForm({
               }
 
               setDate(newDate);
-              setSelected(null);
               setMessage("");
             }}
             className="rounded-md border p-2"
@@ -407,16 +448,37 @@ export default function ReserveForm({
           <span className="text-sm font-medium">Reserve</span>
           <select
             value={machineId}
-            onChange={(e) => {
-              setMachineId(e.target.value);
-              setSelected(null);
+            onChange={async (e) => {
+              const newId = e.target.value;
+
+              setMachineId(newId);
               setMessage("");
+              setCheckingTraining(true);
+              setIsAuthorized(null);
+
+              const m = equipment.find((x) => x.id === newId);
+              if (!m) {
+                setIsAuthorized(false);
+                setCheckingTraining(false);
+                return;
+              }
+
+              const params = new URLSearchParams(searchParams.toString());
+              params.set("machine", m.machineUrl);
+              router.replace(`${pathname}?${params.toString()}`, {
+                scroll: false,
+              });
+
+              await checkTraining(m.name);
             }}
             className="rounded-md border p-2"
           >
+            <option value="" disabled>
+              Select a machine...
+            </option>
             {equipment.map((m) => (
               <option key={m.id} value={m.id}>
-                {m.name} ({m.slotMinutes} min)
+                {m.name}
               </option>
             ))}
           </select>
@@ -433,52 +495,92 @@ export default function ReserveForm({
         <p className="text-gray-500 text-sm mb-4">Checking training status…</p>
       )}
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-        {slots.map((s, i) => {
-          const label = `${formatInEastern(s.start, {
-            hour: "numeric",
-            minute: "2-digit",
-          })}–${formatInEastern(s.end, {
-            hour: "numeric",
-            minute: "2-digit",
-          })}`;
-          const overlapsExisting = machineReservations.some((r) => {
-            const rStart = new Date(r.start);
-            const rEnd = new Date(r.end);
-            return s.start < rEnd && s.end > rStart;
-          });
+      <div className="grid gap-4 sm:grid-cols-2">
+        {/* START TIME */}
+        <div className="flex flex-col gap-1">
+          <span className="text-sm font-medium">Start time</span>
 
-          const disabled =
-            isPast(s) ||
-            overlapsExisting ||
-            checkingTraining ||
-            isAuthorized === false;
-          const isActive =
-            selected &&
-            selected.start.getTime() === s.start.getTime() &&
-            selected.end.getTime() === s.end.getTime();
-          return (
-            <button
-              type="button"
-              key={i}
-              disabled={disabled}
-              onClick={() => setSelected(s)}
-              className={`rounded border px-3 py-2 text-sm transition
-                ${
-                  disabled
-                    ? "opacity-40 cursor-not-allowed"
-                    : "hover:bg-black/5"
-                }
-                ${isActive ? "ring-2 ring-blue-600 bg-blue-50" : ""}
-              `}
-              title={disabled ? "Past time" : "Select slot"}
+          <div className="flex gap-2">
+            <input
+              inputMode="numeric"
+              value={startHour}
+              onChange={(e) => {
+                setStartHour(e.target.value.replace(/\D/g, "").slice(0, 2));
+                setMessage("");
+              }}
+              placeholder="9"
+              className="w-16 rounded-md border p-2"
+              disabled={checkingTraining || isAuthorized === false}
+            />
+
+            <span className="self-center">:</span>
+
+            <input
+              inputMode="numeric"
+              value={startMinute}
+              onChange={(e) => {
+                setStartMinute(e.target.value.replace(/\D/g, "").slice(0, 2));
+                setMessage("");
+              }}
+              placeholder="00"
+              className="w-16 rounded-md border p-2"
+              disabled={checkingTraining || isAuthorized === false}
+            />
+
+            <select
+              value={startPeriod}
+              onChange={(e) => {
+                setStartPeriod(e.target.value as "AM" | "PM");
+                setMessage("");
+              }}
+              className="rounded-md border p-2"
+              disabled={checkingTraining || isAuthorized === false}
             >
-              {label}
-            </button>
-          );
-        })}
-      </div>
+              <option value="AM">AM</option>
+              <option value="PM">PM</option>
+            </select>
+          </div>
 
+          <span className="text-xs text-gray-500">Example: 9 : 30 PM</span>
+        </div>
+
+        {/* DURATION */}
+        <div className="flex flex-col gap-1">
+          <span className="text-sm font-medium">Duration</span>
+
+          <div className="flex gap-2">
+            <input
+              type="number"
+              min={1}
+              value={durationValue}
+              onChange={(e) => {
+                setDurationValue(Number(e.target.value));
+                setMessage("");
+              }}
+              className="w-28 rounded-md border p-2"
+              disabled={checkingTraining || isAuthorized === false}
+            />
+
+            <select
+              value={durationUnit}
+              onChange={(e) => {
+                setDurationUnit(e.target.value as "min" | "hr");
+                setMessage("");
+              }}
+              className="rounded-md border p-2"
+              disabled={checkingTraining || isAuthorized === false}
+            >
+              <option value="min">mins</option>
+              <option value="hr">hrs</option>
+            </select>
+          </div>
+
+          {/* optional: show the final minutes */}
+          <span className="text-xs text-gray-500">
+            Total: {durationMin} minutes
+          </span>
+        </div>
+      </div>
       <button
         type="submit"
         disabled={loading || isAuthorized === false || checkingTraining}

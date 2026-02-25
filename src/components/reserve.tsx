@@ -10,6 +10,7 @@ import { formatInEastern } from "@/utils/time";
 type Equipment = {
   id: string;
   name: string;
+  machineUrl: string;
   slotMinutes: number;
   openTime: string;
   closeTime: string;
@@ -27,7 +28,7 @@ export function Reserve({ equipment }: { equipment: Equipment[] }) {
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [loadingReservations, setLoadingReservations] = useState(true);
   const [reservationsError, setReservationsError] = useState<string | null>(
-    null
+    null,
   );
 
   useEffect(() => {
@@ -49,7 +50,7 @@ export function Reserve({ equipment }: { equipment: Equipment[] }) {
         .from("reservations")
         .select('reservation_id, machine, start, "end", duration')
         .eq("user_id", user.id)
-        .gte("start", new Date().toISOString()) // only upcoming
+        .gte("start", new Date().toISOString())
         .order("start", { ascending: true });
 
       if (error) {
