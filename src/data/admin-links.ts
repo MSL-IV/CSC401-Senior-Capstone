@@ -29,4 +29,13 @@ export const adminLinks: AdminLink[] = [
     meta: "Status, maintenance, live usage",
     accent: "bg-indigo-50 text-indigo-700",
   },
+  {
+    title: "Approvals",
+    description:
+        "Approve usage of laser, milling, soldering machines",
+    href: "/admin/approvals",
+    category: "Operations",
+    meta: "Safety, Training, Authorization",
+    accent: "bg-amber-50 text-amber-700",
+  },
 ];
