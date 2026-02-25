@@ -30,6 +30,7 @@ export default async function ReservePage() {
       slotMinutes: m.slot_minutes ?? 30,
       openTime: m.open_time ?? "09:00:00",
       closeTime: m.close_time ?? "17:00:00",
+      requiresApproval: m.requires_approval ?? false,
     })) ?? [];
 
   return <Reserve equipment={equipment} />;
