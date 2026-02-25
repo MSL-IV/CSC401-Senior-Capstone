@@ -13,6 +13,7 @@ type Equipment = {
   slotMinutes: number;
   openTime: string;
   closeTime: string;
+  requiresApproval: boolean;
 };
 
 type Reservation = {
