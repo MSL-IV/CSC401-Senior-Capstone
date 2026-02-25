@@ -4,27 +4,44 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/utils/supabase/client";
 import { User } from "@supabase/supabase-js";
 
-interface FacultySession {
-  id: string;
-  user_email: string;
-  sign_in_time: string;
-  sign_out_time?: string;
-  duration_minutes?: number;
-}
-
 export function FacultySignInOut() {
   const [user, setUser] = useState<User | null>(null);
   const [userRole, setUserRole] = useState<string | null>(null);
-  const [currentSession, setCurrentSession] = useState<FacultySession | null>(null);
+  const [isOpen, setIsOpen] = useState<boolean>(false);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
+
   const supabase = createClient();
 
+  // ---------- Fetch the shared global status ----------
+  const fetchGlobalStatus = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("makerspace_global_status")
+        .select("is_open")
+        .eq("id", 1)
+        .single();
+
+      if (error) {
+        console.error("Error fetching global status:", error);
+        return;
+      }
+
+      setIsOpen(data?.is_open ?? false);
+    } catch (err) {
+      console.error("Error fetching global status:", err);
+    }
+  };
+
+  // ---------- Fetch authenticated user & role ----------
   const fetchUserData = async () => {
     try {
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
+
       if (userError || !user) {
         setError("Please sign in to access faculty controls");
         setLoading(false);
@@ -33,7 +50,6 @@ export function FacultySignInOut() {
 
       setUser(user);
 
-      // Get user role from profiles
       const { data: profile, error: profileError } = await supabase
         .from("profiles")
         .select("role")
@@ -48,10 +64,8 @@ export function FacultySignInOut() {
 
       setUserRole(profile?.role || "student");
 
-      // Check if user has an active session
-      if (profile?.role === "faculty" || profile?.role === "admin") {
-        await checkActiveSession(user.id);
-      }
+      // Load global status
+      await fetchGlobalStatus();
 
       setLoading(false);
     } catch (err) {
@@ -61,28 +75,7 @@ export function FacultySignInOut() {
     }
   };
 
-  const checkActiveSession = async (userId: string) => {
-    try {
-      const { data: activeSession, error } = await supabase
-        .from("makerspace_sessions")
-        .select("*")
-        .eq("user_id", userId)
-        .is("sign_out_time", null)
-        .order("sign_in_time", { ascending: false })
-        .limit(1)
-        .single();
-
-      if (error && error.code !== "PGRST116") { // PGRST116 = no rows returned
-        console.error("Error checking active session:", error);
-        return;
-      }
-
-      setCurrentSession(activeSession || null);
-    } catch (err) {
-      console.error("Error checking active session:", err);
-    }
-  };
-
+  // ---------- Toggle the shared global status ----------
   const toggleMakerspaceStatus = async () => {
     if (!user || actionLoading) return;
 
@@ -90,30 +83,20 @@ export function FacultySignInOut() {
     setError(null);
 
     try {
-      if (currentSession) {
-        // Sign out
-        const { error } = await supabase
-          .from("makerspace_sessions")
-          .update({ sign_out_time: new Date().toISOString() })
-          .eq("id", currentSession.id);
+      const newStatus = !isOpen;
 
-        if (error) throw error;
-        setCurrentSession(null);
-      } else {
-        // Sign in
-        const { data, error } = await supabase
-          .from("makerspace_sessions")
-          .insert({
-            user_id: user.id,
-            user_email: user.email || "",
-            user_role: userRole || "faculty"
-          })
-          .select()
-          .single();
+      const { error } = await supabase
+        .from("makerspace_global_status")
+        .update({
+          is_open: newStatus,
+          updated_by: user.id,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", 1);
 
-        if (error) throw error;
-        setCurrentSession(data);
-      }
+      if (error) throw error;
+
+      setIsOpen(newStatus);
     } catch (err: any) {
       console.error("Error toggling makerspace status:", err);
       setError(err.message || "Failed to toggle makerspace status");
@@ -122,10 +105,32 @@ export function FacultySignInOut() {
     }
   };
 
+  // ---------- Lifecycle: fetch data + real-time subscription ----------
   useEffect(() => {
     fetchUserData();
+
+    // Real-time: re-fetch global status whenever the row changes
+    const channel = supabase
+      .channel("global-status-toggle")
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "makerspace_global_status",
+        },
+        () => {
+          fetchGlobalStatus();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      channel.unsubscribe();
+    };
   }, [supabase]);
 
+  // ---------- Render ----------
   if (loading) {
     return (
       <div className="flex items-center justify-center p-8">
@@ -134,7 +139,6 @@ export function FacultySignInOut() {
     );
   }
 
-  // Only show for faculty and admin users
   if (!user || (userRole !== "faculty" && userRole !== "admin")) {
     return (
       <div className="text-center p-6 bg-[var(--surface)] border border-[var(--border)] rounded-lg">
@@ -148,17 +152,17 @@ export function FacultySignInOut() {
   return (
     <div className="flex items-center justify-between p-4 bg-[var(--surface)] border border-[var(--border)] rounded-lg">
       <div className="flex items-center gap-3">
-        <div className={`h-3 w-3 rounded-full ${currentSession ? 'bg-green-400' : 'bg-red-400'}`} />
+        <div className={`h-3 w-3 rounded-full ${isOpen ? 'bg-green-400' : 'bg-red-400'}`} />
         <div>
           <h3 className="text-sm font-semibold text-[var(--text-primary)]">
             Makerspace Status
           </h3>
           <p className="text-xs text-[var(--text-secondary)]">
-            {currentSession ? 'Currently Open' : 'Currently Closed'}
+            {isOpen ? 'Currently Open' : 'Currently Closed'}
           </p>
         </div>
       </div>
-      
+
       {error && (
         <div className="mx-4 text-xs text-red-600">
           {error}
@@ -170,13 +174,13 @@ export function FacultySignInOut() {
         disabled={actionLoading}
         className={`
           relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50
-          ${currentSession ? 'bg-green-500' : 'bg-gray-300'}
+          ${isOpen ? 'bg-green-500' : 'bg-gray-300'}
         `}
       >
         <span
           className={`
             inline-block h-4 w-4 transform rounded-full bg-white shadow-lg transition-transform duration-200 ease-in-out
-            ${currentSession ? 'translate-x-6' : 'translate-x-1'}
+            ${isOpen ? 'translate-x-6' : 'translate-x-1'}
           `}
         />
       </button>

@@ -28,68 +28,33 @@ export function StatusLight({
 
   const checkMakerspaceStatus = async () => {
     try {
-      // Use the secure makerspace_status view (no personal info exposed)
-      const { data: statusData, error } = await supabase
-        .from("makerspace_status")
+      // Read from the single-row global status table
+      const { data, error } = await supabase
+        .from("makerspace_global_status")
         .select("is_open")
+        .eq("id", 1)
         .single();
 
-      // If view doesn't exist yet, fall back to direct table query
-      if (error && (error.code === "42P01" || error.message?.includes("does not exist"))) {
-        console.log("Status view doesn't exist, trying direct table query");
-        
-        const { data: directQuery, error: directError } = await supabase
-          .from("makerspace_sessions")
-          .select("user_role")
-          .in("user_role", ["faculty", "admin"])
-          .is("sign_out_time", null)
-          .limit(1);
-
-        if (directError && (directError.code === "42P01" || directError.message?.includes("does not exist"))) {
-          console.log("Database table doesn't exist yet, using time-based fallback");
-          // Fallback: Use time-based logic (weekdays 9-5 = open)
-          const now = new Date();
-          const currentHour = now.getHours();
-          const currentDay = now.getDay(); // 0 = Sunday, 6 = Saturday
-          
-          // Open Monday-Friday 9 AM to 5 PM
-          const isWeekday = currentDay >= 1 && currentDay <= 5;
-          const isOpenHours = currentHour >= 9 && currentHour < 17;
-          
-          setStatus(isWeekday && isOpenHours ? "open" : "closed");
-          return;
-        }
-
-        if (directError) {
-          console.error("Error checking direct table:", directError);
-          setStatus("closed");
-          return;
-        }
-
-        // If any faculty/admin member is present, makerspace is open
-        const isOpen = directQuery && directQuery.length > 0;
-        setStatus(isOpen ? "open" : "closed");
-        return;
-      }
-
       if (error) {
-        console.error("Error checking status view:", error);
-        setStatus("closed");
+        console.error("Error checking global status:", error);
+        // Fallback: time-based logic (weekdays 9-5 = open)
+        const now = new Date();
+        const currentHour = now.getHours();
+        const currentDay = now.getDay();
+        const isWeekday = currentDay >= 1 && currentDay <= 5;
+        const isOpenHours = currentHour >= 9 && currentHour < 17;
+        setStatus(isWeekday && isOpenHours ? "open" : "closed");
         return;
       }
 
-      // Use the is_open boolean from the secure view
-      setStatus(statusData?.is_open ? "open" : "closed");
+      setStatus(data?.is_open ? "open" : "closed");
     } catch (error) {
       console.error("Error checking makerspace status:", error);
-      // Fallback to time-based logic
       const now = new Date();
       const currentHour = now.getHours();
       const currentDay = now.getDay();
-      
       const isWeekday = currentDay >= 1 && currentDay <= 5;
       const isOpenHours = currentHour >= 9 && currentHour < 17;
-      
       setStatus(isWeekday && isOpenHours ? "open" : "closed");
     }
   };
@@ -97,24 +62,23 @@ export function StatusLight({
   useEffect(() => {
     checkMakerspaceStatus();
 
-    // Set up real-time subscription to faculty/admin presence changes
+    // Real-time subscription to the global status table
     const subscription = supabase
       .channel("makerspace-status")
       .on(
         "postgres_changes",
         {
-          event: "*",
+          event: "UPDATE",
           schema: "public",
-          table: "makerspace_sessions"
+          table: "makerspace_global_status"
         },
-        (payload) => {
-          console.log("Database change detected:", payload);
+        () => {
           checkMakerspaceStatus();
         }
       )
       .subscribe();
 
-    // Refresh status every 30 seconds as fallback
+    // Refresh every 30 seconds as fallback
     const interval = setInterval(checkMakerspaceStatus, 30000);
 
     return () => {

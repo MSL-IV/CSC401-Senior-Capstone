@@ -73,6 +73,8 @@ export function ViewUsersPage() {
   const [managingUserId, setManagingUserId] = useState<string | null>(null);
   const [certCounts, setCertCounts] = useState<Record<string, { count: number; machines: string[] }>>({});
   const [currentUserRole, setCurrentUserRole] = useState<UserRole | null>(null);
+  const [allMachines, setAllMachines] = useState<{ id: string; name: string }[]>([]);
+  const [certActionLoading, setCertActionLoading] = useState<string | null>(null);
 
   // Fetch current user role
   async function fetchCurrentUserRole() {
@@ -142,6 +144,24 @@ export function ViewUsersPage() {
     } catch (err) {
       setError('An unexpected error occurred while fetching users');
       console.error('Users fetch error:', err);
+    }
+  }
+
+  async function fetchMachines() {
+    try {
+      const { data, error } = await supabase
+        .from('machines')
+        .select('id, name')
+        .order('name', { ascending: true });
+
+      if (error) {
+        console.error('Machines fetch error:', error);
+        return;
+      }
+
+      setAllMachines(data || []);
+    } catch (err) {
+      console.error('Unexpected error fetching machines:', err);
     }
   }
 
@@ -247,6 +267,7 @@ export function ViewUsersPage() {
       await fetchCurrentUserRole();
       await fetchUsers();
       await fetchTrainingCounts();
+      await fetchMachines();
       setLoading(false);
     }
     
@@ -274,19 +295,58 @@ export function ViewUsersPage() {
     }
   };
 
-  const handleOverrideCertificates = async (userId: string) => {
-    setUpdateLoading(userId);
+  const handleGrantCertificate = async (userId: string, machineName: string) => {
+    setCertActionLoading(machineName);
     try {
-      // Get all available machines
-      const { data: machines, error: machinesError } = await supabase
-        .from('machines')
-        .select('id, name');
+      const { error } = await supabase
+        .from('training_certificates')
+        .insert({
+          user_id: userId,
+          machine_name: machineName,
+          completed_at: new Date().toISOString(),
+          issued_by: 'faculty_override',
+        });
 
-      if (machinesError) {
-        setError('Failed to fetch machines: ' + machinesError.message);
+      if (error) {
+        setError('Failed to grant certificate: ' + error.message);
         return;
       }
 
+      await fetchTrainingCounts();
+    } catch (err: any) {
+      console.error('Error granting certificate:', err);
+      setError('Failed to grant certificate: ' + err.message);
+    } finally {
+      setCertActionLoading(null);
+    }
+  };
+
+  const handleRevokeCertificate = async (userId: string, machineName: string) => {
+    setCertActionLoading(machineName);
+    try {
+      const { error } = await supabase
+        .from('training_certificates')
+        .delete()
+        .eq('user_id', userId)
+        .eq('machine_name', machineName);
+
+      if (error) {
+        setError('Failed to revoke certificate: ' + error.message);
+        return;
+      }
+
+      await fetchTrainingCounts();
+    } catch (err: any) {
+      console.error('Error revoking certificate:', err);
+      setError('Failed to revoke certificate: ' + err.message);
+    } finally {
+      setCertActionLoading(null);
+    }
+  };
+
+  const handleOverrideAllCertificates = async (userId: string) => {
+    setUpdateLoading(userId);
+    try {
       // Delete existing certificates for this user
       const { error: deleteError } = await supabase
         .from('training_certificates')
@@ -299,13 +359,12 @@ export function ViewUsersPage() {
       }
 
       // Insert new certificates for all machines
-      const certificates = machines?.map(machine => ({
+      const certificates = allMachines.map(machine => ({
         user_id: userId,
         machine_name: machine.name,
         completed_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        issued_by: 'faculty_override'
-      })) || [];
+        issued_by: 'faculty_override',
+      }));
 
       if (certificates.length > 0) {
         const { error: insertError } = await supabase
@@ -318,12 +377,9 @@ export function ViewUsersPage() {
         }
       }
 
-      // Refresh certificate counts
       await fetchTrainingCounts();
-      setManagingUserId(null);
-      
     } catch (err: any) {
-      console.error('Error overriding certificates:', err);
+      console.error('Error overriding all certificates:', err);
       setError('Failed to override certificates: ' + err.message);
     } finally {
       setUpdateLoading(null);
@@ -685,14 +741,49 @@ export function ViewUsersPage() {
                       <div>
                         <p className="text-sm text-gray-600 mb-2">Training Certificates</p>
                         <div className="text-xs text-gray-500 mb-2">
-                          Current: {certCounts[user.id]?.count || 0} certificates for {certCounts[user.id]?.machines.join(', ') || 'none'}
+                          {certCounts[user.id]?.count || 0} of {allMachines.length} certificates
                         </div>
+
+                        {/* Per-machine certificate list */}
+                        <div className="max-h-48 overflow-y-auto space-y-1 mb-3 border border-gray-200 rounded p-2">
+                          {allMachines.map((machine) => {
+                            const hasCert = certCounts[user.id]?.machines.includes(machine.name);
+                            const isLoading = certActionLoading === machine.name;
+                            return (
+                              <div key={machine.id} className="flex items-center justify-between py-1 px-1 rounded hover:bg-gray-50">
+                                <div className="flex items-center gap-2">
+                                  <span className={`h-2 w-2 rounded-full ${hasCert ? 'bg-emerald-500' : 'bg-gray-300'}`} />
+                                  <span className="text-sm text-gray-700">{machine.name}</span>
+                                </div>
+                                <button
+                                  onClick={() =>
+                                    hasCert
+                                      ? handleRevokeCertificate(user.id, machine.name)
+                                      : handleGrantCertificate(user.id, machine.name)
+                                  }
+                                  disabled={isLoading || updateLoading === user.id}
+                                  className={`px-2 py-1 text-xs rounded font-semibold transition disabled:opacity-50 ${
+                                    hasCert
+                                      ? 'bg-red-100 text-red-700 hover:bg-red-200'
+                                      : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
+                                  }`}
+                                >
+                                  {isLoading ? '...' : hasCert ? 'Revoke' : 'Grant'}
+                                </button>
+                              </div>
+                            );
+                          })}
+                          {allMachines.length === 0 && (
+                            <p className="text-xs text-gray-400 text-center py-2">No machines found</p>
+                          )}
+                        </div>
+
                         <button
-                          onClick={() => handleOverrideCertificates(user.id)}
+                          onClick={() => handleOverrideAllCertificates(user.id)}
                           disabled={updateLoading === user.id}
-                          className="px-3 py-2 text-sm bg-yellow-100 text-yellow-700 rounded hover:bg-yellow-200 disabled:opacity-50"
+                          className="px-3 py-2 text-sm bg-yellow-100 text-yellow-700 rounded hover:bg-yellow-200 disabled:opacity-50 w-full"
                         >
-                          Override All Certificates
+                          Grant All Certificates
                         </button>
                       </div>
                     )}
