@@ -39,6 +39,7 @@ type ActiveCheckout = {
 };
 
 const supabase = createClient();
+const KIOSK_TABLE = "kiosk_checkouts";
 
 export function EquipmentManagementPage() {
   const [equipment, setEquipment] = useState<EquipmentItem[]>([]);
@@ -70,13 +71,13 @@ export function EquipmentManagementPage() {
   async function fetchCheckouts() {
     try {
       const { data, error } = await supabase
-        .from('kiosk_checkouts')
+        .from(KIOSK_TABLE)
         .select('*')
         .neq('status', 'returned')
         .order('created_at', { ascending: false });
 
       if (error) {
-        setError('Failed to fetch equipment in use: ' + error.message);
+        setError(`Failed to fetch equipment in use from ${KIOSK_TABLE}: ` + error.message);
         return;
       }
 
@@ -95,7 +96,7 @@ export function EquipmentManagementPage() {
     setReturnLoading(checkoutId);
     try {
       const { error } = await supabase
-        .from("kiosk_checkouts")
+        .from(KIOSK_TABLE)
         .update({ status: "returned", returned_at: new Date().toISOString() })
         .eq("id", checkoutId);
 
@@ -130,7 +131,7 @@ export function EquipmentManagementPage() {
       .channel("admin-equipment-in-use")
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "kiosk_checkouts" },
+        { event: "*", schema: "public", table: KIOSK_TABLE },
         () => fetchCheckouts()
       )
       .subscribe();
