@@ -32,13 +32,10 @@ type ActiveReservation = {
 
 type ActiveCheckout = {
   id: string;
-  equipment_id: string | null;
-  name: string;
-  user_id: string | null;
-  status: string | null;
-  notes?: string | null;
-  created_at: string;
-  returned_at?: string | null;
+  user_email: string;
+  tags: string[];
+  status?: string | null;
+  created_at?: string;
 };
 
 const supabase = createClient();
@@ -73,7 +70,7 @@ export function EquipmentManagementPage() {
   async function fetchCheckouts() {
     try {
       const { data, error } = await supabase
-        .from('equipment_in_use')
+        .from('kiosk_checkouts')
         .select('*')
         .neq('status', 'returned')
         .order('created_at', { ascending: false });
@@ -83,7 +80,11 @@ export function EquipmentManagementPage() {
         return;
       }
 
-      setCheckouts((data || []) as ActiveCheckout[]);
+      const normalized = (data || []).map((entry) => ({
+        ...entry,
+        tags: entry.tags ?? [],
+      })) as ActiveCheckout[];
+      setCheckouts(normalized);
     } catch (err) {
       setError('An unexpected error occurred while fetching equipment in use');
       console.error('Equipment-in-use fetch error:', err);
@@ -94,7 +95,7 @@ export function EquipmentManagementPage() {
     setReturnLoading(checkoutId);
     try {
       const { error } = await supabase
-        .from("equipment_in_use")
+        .from("kiosk_checkouts")
         .update({ status: "returned", returned_at: new Date().toISOString() })
         .eq("id", checkoutId);
 
@@ -123,6 +124,20 @@ export function EquipmentManagementPage() {
     }
     
     loadData();
+
+    // Listen for kiosk checkout changes to keep the dashboard in sync
+    const channel = supabase
+      .channel("admin-equipment-in-use")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "kiosk_checkouts" },
+        () => fetchCheckouts()
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const summary = useMemo(() => {
@@ -197,7 +212,8 @@ export function EquipmentManagementPage() {
     }
   };
 
-  const formatTime = (timeString: string) => {
+  const formatTime = (timeString?: string) => {
+    if (!timeString) return "—";
     const date = new Date(timeString);
     const todayEastern = easternDateInputValue();
     const timeEasternDay = easternDateInputValue(date);
@@ -415,7 +431,7 @@ export function EquipmentManagementPage() {
                 Equipment In Use
               </h2>
               <p className="text-sm text-[var(--text-secondary)]">
-                Track active check-outs across tools and consumables.
+                Live view of RFID kiosk check-outs saved in the database.
               </p>
             </div>
           </div>
@@ -426,14 +442,14 @@ export function EquipmentManagementPage() {
                 className="rounded-2xl border border-[var(--border)] p-4"
               >
                 <p className="text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)]">
-                  {checkout.equipment_id ? "Catalog Item" : "Other"}
+                  Kiosk Checkout
                 </p>
                 <p className="mt-2 font-heading text-lg font-semibold text-[var(--text-primary)]">
-                  {checkout.name}
+                  {checkout.tags?.[0] ?? "No tag captured"}
                 </p>
-                {checkout.notes && (
+                {checkout.tags && checkout.tags.length > 1 && (
                   <p className="text-sm text-[var(--text-secondary)]">
-                    {checkout.notes}
+                    +{checkout.tags.length - 1} additional tag{checkout.tags.length - 1 === 1 ? "" : "s"}
                   </p>
                 )}
                 <dl className="mt-4 space-y-2 text-sm text-[var(--text-secondary)]">
@@ -444,12 +460,23 @@ export function EquipmentManagementPage() {
                     </dd>
                   </div>
                   <div className="flex items-center justify-between">
-                    <dt>Status</dt>
-                    <dd>
-                      <span className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold bg-amber-50 text-amber-700">
-                        <span className="h-2 w-2 rounded-full bg-amber-500" />
-                        In use
-                      </span>
+                    <dt>User</dt>
+                    <dd className="font-semibold text-[var(--text-primary)]">
+                      {checkout.user_email || "Unknown"}
+                    </dd>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <dt>Tags</dt>
+                    <dd className="flex flex-wrap gap-2 justify-end">
+                      {(checkout.tags ?? []).map((tag) => (
+                        <span
+                          key={tag}
+                          className="inline-flex items-center rounded-full bg-[var(--surface-muted)] px-3 py-1 text-[11px] font-semibold text-[var(--text-primary)]"
+                        >
+                          {tag}
+                        </span>
+                      ))}
+                      {(!checkout.tags || checkout.tags.length === 0) && "—"}
                     </dd>
                   </div>
                 </dl>
