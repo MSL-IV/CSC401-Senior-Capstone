@@ -27,8 +27,16 @@ export async function updateSession(request: NextRequest) {
     }
   )
 
-  // refreshing the auth token
-  await supabase.auth.getUser()
+  // Refresh auth token if a session cookie exists; ignore missing-refresh-token errors.
+  try {
+    await supabase.auth.getUser()
+  } catch (err) {
+    const message = err instanceof Error ? err.message : ''
+    if (!message.toLowerCase().includes('refresh token')) {
+      throw err
+    }
+    // No valid session cookie present; proceed without failing the request.
+  }
 
   return supabaseResponse
 }
