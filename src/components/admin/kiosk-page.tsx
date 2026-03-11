@@ -45,7 +45,7 @@ export function KioskPage() {
 
     const { data, error } = await supabase
       .from(TAG_LOOKUP_TABLE)
-      .select(`${TAG_COLUMN}, ${NAME_COLUMN}`)
+      .select("*")
       .in(TAG_COLUMN, missing);
 
     if (error) {
@@ -53,7 +53,7 @@ export function KioskPage() {
       return;
     }
 
-    const mapped = rowsToTagMap(data || []);
+    const mapped = rowsToTagMap((data ?? []) as Record<string, unknown>[]);
     if (Object.keys(mapped).length) {
       setTagMap((prev) => ({ ...prev, ...mapped }));
     }
@@ -97,21 +97,24 @@ export function KioskPage() {
     try {
       // Resolve tag to equipment name if present
       let displayTag = trimmed;
-      const { data: tagRows, error: lookupError } = await supabase
+      const { data: tagRow, error: lookupError } = await supabase
         .from(TAG_LOOKUP_TABLE)
-        .select(`${TAG_COLUMN}, ${NAME_COLUMN}`)
+        .select("*")
         .eq(TAG_COLUMN, trimmed)
-        .limit(1)
         .maybeSingle();
 
       if (lookupError) {
         console.warn(`RFID lookup failed from ${TAG_LOOKUP_TABLE}:`, lookupError.message);
-      } else if (tagRows && tagRows[NAME_COLUMN]) {
-        displayTag = String(tagRows[NAME_COLUMN]);
-        setTagMap((prev) => ({
-          ...prev,
-          [normalizeTag(trimmed)]: displayTag,
-        }));
+      } else if (tagRow) {
+        const row = tagRow as Record<string, unknown>;
+        const nameValue = row[NAME_COLUMN];
+        if (typeof nameValue === "string" || typeof nameValue === "number") {
+          displayTag = String(nameValue);
+          setTagMap((prev) => ({
+            ...prev,
+            [normalizeTag(trimmed)]: displayTag,
+          }));
+        }
       }
 
       const { data, error } = await supabase
