@@ -105,7 +105,7 @@ export function EquipmentManagementPage() {
 
     const { data, error } = await supabase
       .from(TAG_LOOKUP_TABLE)
-      .select(`${TAG_COLUMN}, ${NAME_COLUMN}`)
+      .select("*")
       .in(TAG_COLUMN, missing);
 
     if (error) {
@@ -113,7 +113,7 @@ export function EquipmentManagementPage() {
       return;
     }
 
-    const mapped = rowsToTagMap(data || []);
+    const mapped = rowsToTagMap((data ?? []) as Record<string, unknown>[]);
     if (Object.keys(mapped).length) {
       setTagMap((prev) => ({ ...prev, ...mapped }));
     }
