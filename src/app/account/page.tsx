@@ -46,7 +46,8 @@ export default async function AccountPage({
     .from("reservations")
     .select("reservation_id, machine, start, end, duration")
     .eq("user_id", user.id)
-    .order("start", { ascending: false })
+    .gte("end", new Date().toISOString())
+    .order("start", { ascending: true })
     .limit(10);
 
   const { data: trainingCerts } = await supabase
