@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/utils/supabase/server";
 
-async function requireAdminOrFaculty() {
+async function requireKioskAccess() {
   const supabase = await createClient();
 
   const {
@@ -19,7 +19,9 @@ async function requireAdminOrFaculty() {
     .eq("id", user.id)
     .single();
 
-  if (profileError || (profile?.role !== "admin" && profile?.role !== "faculty")) {
+  const role = profile?.role;
+
+  if (profileError || (role !== "admin" && role !== "faculty" && role !== "kiosk")) {
     redirect("/");
   }
 
@@ -31,7 +33,7 @@ export default async function KioskLayout({
 }: {
   children: React.ReactNode;
 }) {
-  await requireAdminOrFaculty();
+  await requireKioskAccess();
 
   return (
     <div

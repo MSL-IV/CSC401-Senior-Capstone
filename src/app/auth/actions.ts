@@ -15,10 +15,24 @@ export async function login(formData: FormData) {
     password: formData.get('password') as string,
   }
 
-  const { error } = await supabase.auth.signInWithPassword(data)
+  const { data: authData, error } = await supabase.auth.signInWithPassword(data)
 
   if (error) {
     redirect('/error')
+  }
+
+  // Redirect kiosk users directly to the kiosk page
+  if (authData.user) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', authData.user.id)
+      .single()
+
+    if (profile?.role === 'kiosk') {
+      revalidatePath('/', 'layout')
+      redirect('/admin/kiosk')
+    }
   }
 
   revalidatePath('/', 'layout')

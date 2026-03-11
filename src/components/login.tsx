@@ -54,7 +54,19 @@ export function LoginPage() {
       if (error) {
         setLoginError(error.message);
       } else {
-        // Redirect to dashboard or home page on successful login
+        // Check role and redirect kiosk users to the kiosk page
+        const userId = data.user?.id;
+        if (userId) {
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("role")
+            .eq("id", userId)
+            .single();
+          if (profile?.role === "kiosk") {
+            router.push("/admin/kiosk");
+            return;
+          }
+        }
         router.push("/");
       }
     } catch (error) {

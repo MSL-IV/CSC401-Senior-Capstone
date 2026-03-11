@@ -5,7 +5,7 @@ import { createClient } from "@/utils/supabase/client";
 import { canModifyUserRoles, isFacultyOrAdmin } from "@/utils/permissions";
 
 type UserStatus = "active" | "pending" | "suspended";
-type UserRole = "student" | "faculty" | "admin";
+type UserRole = "student" | "faculty" | "admin" | "kiosk";
 
 type UserRecord = {
   id: string;
@@ -60,6 +60,7 @@ const roleLabels: Record<UserRole, string> = {
   student: "Student",
   faculty: "Faculty",
   admin: "Admin",
+  kiosk: "Kiosk",
 };
 
 export function ViewUsersPage() {
@@ -575,7 +576,7 @@ export function ViewUsersPage() {
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              {(["all", "student", "faculty", "admin"] as const).map((role) => (
+              {(["all", "student", "faculty", "admin", "kiosk"] as const).map((role) => (
                 <button
                   key={role}
                   type="button"
@@ -732,6 +733,13 @@ export function ViewUsersPage() {
                             className="px-3 py-2 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200 disabled:opacity-50"
                           >
                             Admin
+                          </button>
+                          <button
+                            onClick={() => handleChangeRole(user.id, 'kiosk')}
+                            disabled={updateLoading === user.id}
+                            className="px-3 py-2 text-sm bg-amber-100 text-amber-700 rounded hover:bg-amber-200 disabled:opacity-50"
+                          >
+                            Kiosk
                           </button>
                         </div>
                       </div>

@@ -31,6 +31,11 @@ export async function requireFacultyOrAdmin(): Promise<boolean> {
   return role === 'faculty' || role === 'admin';
 }
 
+export async function requireKioskAccess(): Promise<boolean> {
+  const role = await getCurrentUserRole();
+  return role === 'kiosk' || role === 'admin' || role === 'faculty';
+}
+
 export async function canModifyUserRoles(): Promise<boolean> {
   const role = await getCurrentUserRole();
   return role === 'admin';
@@ -40,7 +45,7 @@ export async function canModifyUserRoles(): Promise<boolean> {
  * Middleware function to check permissions in API routes
  */
 export async function withPermissionCheck(
-  requiredPermission: 'admin' | 'faculty' | 'authenticated'
+  requiredPermission: 'admin' | 'faculty' | 'kiosk' | 'authenticated'
 ): Promise<{ authorized: boolean; role: UserRole | null }> {
   const role = await getCurrentUserRole();
   
@@ -53,6 +58,8 @@ export async function withPermissionCheck(
       return { authorized: role === 'admin', role };
     case 'faculty': 
       return { authorized: role === 'faculty' || role === 'admin', role };
+    case 'kiosk':
+      return { authorized: role === 'kiosk' || role === 'admin' || role === 'faculty', role };
     case 'authenticated':
       return { authorized: true, role };
     default:

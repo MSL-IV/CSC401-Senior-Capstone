@@ -28,6 +28,10 @@ async function requireAdminOrFaculty() {
     .single();
 
   if (profileError || (profile?.role !== "admin" && profile?.role !== "faculty")) {
+    // Kiosk accounts should only access the kiosk page
+    if (profile?.role === "kiosk") {
+      redirect("/admin/kiosk");
+    }
     redirect("/");
   }
 
