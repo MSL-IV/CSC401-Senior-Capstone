@@ -2,14 +2,10 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/utils/supabase/client";
+import { NAME_COLUMN, normalizeTag, rowsToTagMap, TAG_COLUMN, TAG_LOOKUP_TABLE } from "@/utils/rfid";
 
 // Mirror the auth form logic: allow any syntactically valid email.
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-type ScannedTag = {
-  id: string;
-  timestamp: number;
-};
 
 type CheckoutRecord = {
   id: string;
@@ -24,8 +20,8 @@ export function KioskPage() {
   const [email, setEmail] = useState("");
   const [emailTouched, setEmailTouched] = useState(false);
   const [tagInput, setTagInput] = useState("");
-  const [tags, setTags] = useState<ScannedTag[]>([]);
   const [checkouts, setCheckouts] = useState<CheckoutRecord[]>([]);
+  const [tagMap, setTagMap] = useState<Record<string, string>>({});
   const [loadingCheckouts, setLoadingCheckouts] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [submitMessage, setSubmitMessage] = useState<string | null>(null);
@@ -41,6 +37,28 @@ export function KioskPage() {
     return () => clearInterval(interval);
   }, []);
 
+  const loadTagNames = async (tagsToLookup: string[]) => {
+    const missing = tagsToLookup
+      .map(normalizeTag)
+      .filter((tag) => tag && !(tag in tagMap));
+    if (!missing.length) return;
+
+    const { data, error } = await supabase
+      .from(TAG_LOOKUP_TABLE)
+      .select("*")
+      .in(TAG_COLUMN, missing);
+
+    if (error) {
+      console.warn(`RFID lookup failed from ${TAG_LOOKUP_TABLE}:`, error.message);
+      return;
+    }
+
+    const mapped = rowsToTagMap((data ?? []) as Record<string, unknown>[]);
+    if (Object.keys(mapped).length) {
+      setTagMap((prev) => ({ ...prev, ...mapped }));
+    }
+  };
+
   const loadCheckouts = async () => {
     setLoadingCheckouts(true);
     const { data, error } = await supabase
@@ -51,18 +69,22 @@ export function KioskPage() {
 
     if (!error && data) {
       setCheckouts(data as CheckoutRecord[]);
+      const uniqueTags = Array.from(
+        new Set((data as CheckoutRecord[]).flatMap((c) => c.tags || []))
+      );
+      await loadTagNames(uniqueTags);
     }
     setLoadingCheckouts(false);
+  };
+
+  const resolveTagLabel = (tag: string) => {
+    const normalized = normalizeTag(tag);
+    return tagMap[normalized] ?? normalized;
   };
 
   const addTag = async (value: string) => {
     const trimmed = value.trim();
     if (!trimmed) return;
-
-    setTags((prev) => [
-      { id: trimmed, timestamp: Date.now() },
-      ...prev,
-    ]);
 
     // Require valid email before persisting
     if (!emailIsValid) {
@@ -73,11 +95,33 @@ export function KioskPage() {
     setSubmitting(true);
     setSubmitMessage(null);
     try {
+      // Resolve tag to equipment name if present
+      let displayTag = trimmed;
+      const { data: tagRow, error: lookupError } = await supabase
+        .from(TAG_LOOKUP_TABLE)
+        .select("*")
+        .eq(TAG_COLUMN, trimmed)
+        .maybeSingle();
+
+      if (lookupError) {
+        console.warn(`RFID lookup failed from ${TAG_LOOKUP_TABLE}:`, lookupError.message);
+      } else if (tagRow) {
+        const row = tagRow as Record<string, unknown>;
+        const nameValue = row[NAME_COLUMN];
+        if (typeof nameValue === "string" || typeof nameValue === "number") {
+          displayTag = String(nameValue);
+          setTagMap((prev) => ({
+            ...prev,
+            [normalizeTag(trimmed)]: displayTag,
+          }));
+        }
+      }
+
       const { data, error } = await supabase
         .from("kiosk_checkouts")
         .insert({
           user_email: email.trim(),
-          tags: [trimmed],
+          tags: [displayTag],
           status: "open",
         })
         .select()
@@ -90,9 +134,10 @@ export function KioskPage() {
 
       if (data) {
         setCheckouts((prev) => [data as CheckoutRecord, ...prev]);
+        await loadTagNames([displayTag]);
       }
 
-      setSubmitMessage(`Saved tag ${trimmed} to Supabase`);
+      setSubmitMessage(`Saved tag ${displayTag} to Supabase`);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unexpected error";
       setSubmitMessage(`Failed to save: ${message}`);
@@ -133,7 +178,6 @@ export function KioskPage() {
   };
 
   const clearSession = () => {
-    setTags([]);
     setTagInput("");
     setEmail("");
     tagFieldRef.current?.focus();
@@ -267,7 +311,7 @@ export function KioskPage() {
                         disabled={returningId === checkout.id}
                         className="rounded-full bg-emerald-600 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-white transition hover:opacity-90 disabled:opacity-50 disabled:bg-emerald-400"
                       >
-                        {returningId === checkout.id ? "Returning..." : "Returned"}
+                        {returningId === checkout.id ? "Returning..." : "Return"}
                       </button>
                     </div>
                     <div className="space-y-2">
@@ -282,9 +326,10 @@ export function KioskPage() {
                         {checkout.tags?.map((tag) => (
                           <span
                             key={tag}
-                            className="rounded-full bg-[var(--surface-muted)] px-3 py-1 text-xs font-semibold text-[var(--text-primary)] font-mono"
+                            title={tag}
+                            className="rounded-full bg-[var(--surface-muted)] px-3 py-1 text-xs font-semibold text-[var(--text-primary)]"
                           >
-                            {tag}
+                            {resolveTagLabel(tag)}
                           </span>
                         ))}
                       </div>

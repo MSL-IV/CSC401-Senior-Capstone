@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/utils/supabase/client";
 import { easternDateInputValue, formatInEastern } from "@/utils/time";
+import { NAME_COLUMN, normalizeTag, rowsToTagMap, TAG_COLUMN, TAG_LOOKUP_TABLE } from "@/utils/rfid";
 
 type EquipmentStatus = "available" | "unavailable" | "maintenance";
 
@@ -44,6 +45,7 @@ const KIOSK_TABLE = "kiosk_checkouts";
 export function EquipmentManagementPage() {
   const [equipment, setEquipment] = useState<EquipmentItem[]>([]);
   const [checkouts, setCheckouts] = useState<ActiveCheckout[]>([]);
+  const [tagMap, setTagMap] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [updateLoading, setUpdateLoading] = useState<string | null>(null);
@@ -86,11 +88,41 @@ export function EquipmentManagementPage() {
         tags: entry.tags ?? [],
       })) as ActiveCheckout[];
       setCheckouts(normalized);
+
+      const uniqueTags = Array.from(new Set(normalized.flatMap((c) => c.tags || [])));
+      await loadTagNames(uniqueTags);
     } catch (err) {
       setError('An unexpected error occurred while fetching equipment in use');
       console.error('Equipment-in-use fetch error:', err);
     }
   }
+
+  const loadTagNames = async (tagsToLookup: string[]) => {
+    const missing = tagsToLookup
+      .map(normalizeTag)
+      .filter((tag) => tag && !(tag in tagMap));
+    if (!missing.length) return;
+
+    const { data, error } = await supabase
+      .from(TAG_LOOKUP_TABLE)
+      .select("*")
+      .in(TAG_COLUMN, missing);
+
+    if (error) {
+      console.warn(`RFID lookup failed from ${TAG_LOOKUP_TABLE}:`, error.message);
+      return;
+    }
+
+    const mapped = rowsToTagMap((data ?? []) as Record<string, unknown>[]);
+    if (Object.keys(mapped).length) {
+      setTagMap((prev) => ({ ...prev, ...mapped }));
+    }
+  };
+
+  const resolveTagLabel = (tag: string) => {
+    const normalized = normalizeTag(tag);
+    return tagMap[normalized] ?? normalized;
+  };
 
   const handleReturn = async (checkoutId: string) => {
     setReturnLoading(checkoutId);
@@ -446,7 +478,7 @@ export function EquipmentManagementPage() {
                   Kiosk Checkout
                 </p>
                 <p className="mt-2 font-heading text-lg font-semibold text-[var(--text-primary)]">
-                  {checkout.tags?.[0] ?? "No tag captured"}
+                  {checkout.tags?.[0] ? resolveTagLabel(checkout.tags[0]) : "No tag captured"}
                 </p>
                 {checkout.tags && checkout.tags.length > 1 && (
                   <p className="text-sm text-[var(--text-secondary)]">
@@ -472,9 +504,10 @@ export function EquipmentManagementPage() {
                       {(checkout.tags ?? []).map((tag) => (
                         <span
                           key={tag}
+                          title={tag}
                           className="inline-flex items-center rounded-full bg-[var(--surface-muted)] px-3 py-1 text-[11px] font-semibold text-[var(--text-primary)]"
                         >
-                          {tag}
+                          {resolveTagLabel(tag)}
                         </span>
                       ))}
                       {(!checkout.tags || checkout.tags.length === 0) && "—"}
