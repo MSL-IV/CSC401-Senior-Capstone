@@ -60,9 +60,9 @@ const heroSlides = [
 
 const features = [
   {
-    title: "3D Printing & Fabrication",
+    title: "Step 1: Scan the RFID Tag",
     description:
-      "Access professional-grade 3D printers, laser cutters, and CNC machines.",
+      "Use your phone to scan the RFID Tag on any equipment or machine.",
     icon: (
       <svg
         viewBox="0 0 48 48"
@@ -71,32 +71,16 @@ const features = [
         className="h-10 w-10"
         aria-hidden="true"
       >
-        <path
-          d="M8 14h32v20H8z"
-          stroke="currentColor"
-          strokeWidth={2}
-          strokeLinejoin="round"
-        />
-        <path
-          d="M16 14V8h16v6M16 34v6h16v-6"
-          stroke="currentColor"
-          strokeWidth={2}
-          strokeLinejoin="round"
-        />
-        <path
-          d="M20 20h8v8h-8z"
-          stroke="currentColor"
-          strokeWidth={2}
-          strokeLinejoin="round"
-        />
+        <rect x="14" y="4" width="20" height="40" rx="3" stroke="currentColor" strokeWidth="2" />
+        <circle cx="24" cy="38" r="2" fill="currentColor" />
+        <path d="M18 8h12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
       </svg>
     ),
   },
   {
-    title: "Workshops & Training",
+    title: "Step 2: Schedule your session",
     description:
-      "Join sessions on CAD modeling, soldering, and safety certification.",
-    href: "/training",
+      "Enter the date, starting time, and how long you will need. We'll confirm the equipment is free and that your training is up to date.",
     icon: (
       <svg
         viewBox="0 0 48 48"
@@ -105,30 +89,17 @@ const features = [
         className="h-10 w-10"
         aria-hidden="true"
       >
-        <path
-          d="m26 12 10 10-6 6-10-10"
-          stroke="currentColor"
-          strokeWidth={2}
-          strokeLinejoin="round"
-        />
-        <path
-          d="M18 34H8v-6l14-14M32 28h8"
-          stroke="currentColor"
-          strokeWidth={2}
-          strokeLinejoin="round"
-        />
-        <path
-          d="M24 18a4 4 0 1 1 5.66-5.66A4 4 0 0 1 24 18Z"
-          stroke="currentColor"
-          strokeWidth={2}
-          strokeLinejoin="round"
-        />
+        <rect x="8" y="10" width="32" height="30" rx="2" stroke="currentColor" strokeWidth="2" />
+        <path d="M8 20h32M16 6v8M32 6v8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+        <rect x="14" y="26" width="4" height="4" fill="currentColor" />
+        <rect x="22" y="26" width="4" height="4" fill="currentColor" />
+        <rect x="30" y="26" width="4" height="4" fill="currentColor" />
       </svg>
     ),
   },
   {
-    title: "Student Innovation Projects",
-    description: "Collaborate with peers and turn your ideas into prototypes.",
+    title: "Step 3: Start using the Machine",
+    description: "Once confirmed, you are authorized to start your session with the machines or collect your checked out gear.",
     icon: (
       <svg
         viewBox="0 0 48 48"
@@ -137,18 +108,8 @@ const features = [
         className="h-10 w-10"
         aria-hidden="true"
       >
-        <path
-          d="M24 8a9 9 0 0 0-4.85 16.6c.24.16.38.44.34.73l-.72 5.75a1 1 0 0 0 1.57.97l3.66-2.44a.9.9 0 0 1 .98 0l3.66 2.44a1 1 0 0 0 1.57-.97l-.72-5.75a.9.9 0 0 1 .34-.73A9 9 0 0 0 24 8Z"
-          stroke="currentColor"
-          strokeWidth={2}
-          strokeLinejoin="round"
-        />
-        <path
-          d="M18 40h12"
-          stroke="currentColor"
-          strokeWidth={2}
-          strokeLinecap="round"
-        />
+        <circle cx="24" cy="24" r="20" stroke="currentColor" strokeWidth="2" />
+        <path d="m14 24 7 7 13-13" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
     ),
   },
