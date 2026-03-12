@@ -304,13 +304,12 @@ export function Home() {
           </div>
         </section>
         <section className="grid gap-6 md:grid-cols-3">
-          {features.map(({ title, description, icon, href }) => (
+          {features.map(({ title, description, icon }) => (
             <FeatureCard
               key={title}
               icon={icon}
               title={title}
               description={description}
-              href={href}
             />
           ))}
         </section>
