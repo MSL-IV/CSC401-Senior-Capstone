@@ -73,7 +73,61 @@ export default function ReserveForm({
   const [checkingTraining, setCheckingTraining] = useState(true);
 
   const supabase = useMemo(() => createBrowserClient(), []);
+  const timelineData = useMemo(() => {
+    if (!machine || !date) return null;
 
+    const open = zonedDateToUtc(date, machine.openTime ?? "09:00:00");
+    const close = zonedDateToUtc(date, machine.closeTime ?? "17:00:00");
+
+    const totalMinutes = (close.getTime() - open.getTime()) / 60000;
+    if (totalMinutes <= 0) return null;
+
+    const blocks = machineReservations.map((r) => {
+      const start = new Date(r.start);
+      const end = new Date(r.end);
+
+      const startOffsetMin = (start.getTime() - open.getTime()) / 60000;
+      const endOffsetMin = (end.getTime() - open.getTime()) / 60000;
+
+      return {
+        start,
+        end,
+        startOffsetMin,
+        endOffsetMin,
+        durationMin: (end.getTime() - start.getTime()) / 60000,
+        topPct: (startOffsetMin / totalMinutes) * 100,
+        heightPct: ((endOffsetMin - startOffsetMin) / totalMinutes) * 100,
+      };
+    });
+
+    return {
+      open,
+      close,
+      totalMinutes,
+      blocks,
+    };
+  }, [machine, date, machineReservations]);
+  const selectedPreview = useMemo(() => {
+    if (!machine || !date || !durationMin) return null;
+
+    const startTime24 = to24Hour(startHour, startMinute, startPeriod);
+    const start = zonedDateToUtc(date, `${startTime24}:00`);
+    const end = new Date(start.getTime() + durationMin * 60000);
+
+    const open = zonedDateToUtc(date, machine.openTime ?? "09:00:00");
+    const close = zonedDateToUtc(date, machine.closeTime ?? "17:00:00");
+
+    const totalMinutes = (close.getTime() - open.getTime()) / 60000;
+    if (totalMinutes <= 0) return null;
+
+    const startOffsetMin = (start.getTime() - open.getTime()) / 60000;
+    const endOffsetMin = (end.getTime() - open.getTime()) / 60000;
+
+    return {
+      topPct: (startOffsetMin / totalMinutes) * 100,
+      heightPct: ((endOffsetMin - startOffsetMin) / totalMinutes) * 100,
+    };
+  }, [machine, date, startHour, startMinute, startPeriod, durationMin]);
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
@@ -443,7 +497,6 @@ export default function ReserveForm({
             className="rounded-md border p-2"
           />
         </label>
-
         <label className="flex flex-col gap-1 sm:col-span-2">
           <span className="text-sm font-medium">Reserve</span>
           <select
@@ -483,17 +536,113 @@ export default function ReserveForm({
             ))}
           </select>
         </label>
-      </div>
-      {isAuthorized === false && (
-        <p className="text-red-600 text-sm mb-4">
-          You are not authorized to use this machine. Complete required training
-          first.
-        </p>
-      )}
+        {isAuthorized === false && (
+          <p className="text-red-600 text-sm mb-4 sm:col-span-3">
+            {" "}
+            You are not authorized to use this machine. Complete required
+            training first.
+          </p>
+        )}
+        {checkingTraining && (
+          <p className="text-gray-500 text-sm mb-4 sm:col-span-3">
+            {" "}
+            Checking training status…
+          </p>
+        )}
+        <div className="border-t border-gray-200 pt-4 sm:col-span-3" />{" "}
+        {timelineData && (
+          <div className="space-y-2 sm:col-span-3">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium">Daily availability</span>
+              <span className="text-xs text-gray-500">
+                {formatInEastern(timelineData.open, {
+                  hour: "numeric",
+                  minute: "2-digit",
+                })}{" "}
+                –{" "}
+                {formatInEastern(timelineData.close, {
+                  hour: "numeric",
+                  minute: "2-digit",
+                })}
+              </span>
+            </div>
 
-      {checkingTraining && (
-        <p className="text-gray-500 text-sm mb-4">Checking training status…</p>
-      )}
+            {/* horizontal time labels */}
+            <div className="flex items-center justify-between text-xs text-gray-500">
+              <span>
+                {formatInEastern(timelineData.open, {
+                  hour: "numeric",
+                  minute: "2-digit",
+                })}
+              </span>
+              <span>
+                {formatInEastern(
+                  new Date(
+                    (timelineData.open.getTime() +
+                      timelineData.close.getTime()) /
+                      2,
+                  ),
+                  { hour: "numeric", minute: "2-digit" },
+                )}
+              </span>
+              <span>
+                {formatInEastern(timelineData.close, {
+                  hour: "numeric",
+                  minute: "2-digit",
+                })}
+              </span>
+            </div>
+
+            {/* horizontal timeline */}
+            <div className="relative h-10 w-full overflow-hidden rounded-lg border bg-green-50">
+              {/* booked reservations */}
+              {timelineData.blocks.map((block, i) => (
+                <div
+                  key={i}
+                  className="absolute top-0 bottom-0 bg-red-300 border-x border-red-400 opacity-80"
+                  style={{
+                    left: `${block.topPct}%`,
+                    width: `${block.heightPct}%`,
+                  }}
+                  title={`${formatInEastern(block.start, {
+                    hour: "numeric",
+                    minute: "2-digit",
+                  })} - ${formatInEastern(block.end, {
+                    hour: "numeric",
+                    minute: "2-digit",
+                  })}`}
+                />
+              ))}
+
+              {/* selected preview */}
+              {selectedPreview && (
+                <div
+                  className="absolute top-0 bottom-0 bg-blue-400/50 border-x border-blue-500 pointer-events-none"
+                  style={{
+                    left: `${selectedPreview.topPct}%`,
+                    width: `${selectedPreview.heightPct}%`,
+                  }}
+                />
+              )}
+            </div>
+
+            <div className="flex gap-4 text-xs text-gray-600">
+              <div className="flex items-center gap-1">
+                <span className="inline-block h-3 w-3 rounded bg-green-50 border" />
+                Available
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="inline-block h-3 w-3 rounded bg-red-300 border border-red-400" />
+                Booked
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="inline-block h-3 w-3 rounded bg-blue-400/50 border border-blue-500" />
+                Your selection
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
         {/* START TIME */}
