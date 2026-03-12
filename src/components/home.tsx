@@ -60,9 +60,8 @@ const heroSlides = [
 
 const features = [
   {
-    title: "Step 1: Scan the RFID Tag",
-    description:
-      "Use your phone to scan the RFID Tag on any equipment or machine.",
+    title: "Step 1: Scan the NFC Tag",
+    description: "Use your phone to scan the NFC Tag on any machine.",
     icon: (
       <svg
         viewBox="0 0 48 48"
@@ -71,9 +70,22 @@ const features = [
         className="h-10 w-10"
         aria-hidden="true"
       >
-        <rect x="14" y="4" width="20" height="40" rx="3" stroke="currentColor" strokeWidth="2" />
+        <rect
+          x="14"
+          y="4"
+          width="20"
+          height="40"
+          rx="3"
+          stroke="currentColor"
+          strokeWidth="2"
+        />
         <circle cx="24" cy="38" r="2" fill="currentColor" />
-        <path d="M18 8h12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+        <path
+          d="M18 8h12"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+        />
       </svg>
     ),
   },
@@ -89,8 +101,21 @@ const features = [
         className="h-10 w-10"
         aria-hidden="true"
       >
-        <rect x="8" y="10" width="32" height="30" rx="2" stroke="currentColor" strokeWidth="2" />
-        <path d="M8 20h32M16 6v8M32 6v8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+        <rect
+          x="8"
+          y="10"
+          width="32"
+          height="30"
+          rx="2"
+          stroke="currentColor"
+          strokeWidth="2"
+        />
+        <path
+          d="M8 20h32M16 6v8M32 6v8"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+        />
         <rect x="14" y="26" width="4" height="4" fill="currentColor" />
         <rect x="22" y="26" width="4" height="4" fill="currentColor" />
         <rect x="30" y="26" width="4" height="4" fill="currentColor" />
@@ -99,7 +124,8 @@ const features = [
   },
   {
     title: "Step 3: Start using the Machine",
-    description: "Once confirmed, you are authorized to start your session with the machines or collect your checked out gear.",
+    description:
+      "Once confirmed, you are authorized to start your session with the machines or collect your checked out gear.",
     icon: (
       <svg
         viewBox="0 0 48 48"
@@ -109,7 +135,13 @@ const features = [
         aria-hidden="true"
       >
         <circle cx="24" cy="24" r="20" stroke="currentColor" strokeWidth="2" />
-        <path d="m14 24 7 7 13-13" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+        <path
+          d="m14 24 7 7 13-13"
+          stroke="currentColor"
+          strokeWidth="3"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
       </svg>
     ),
   },
@@ -122,14 +154,16 @@ export function Home() {
   const supabase = createClient();
 
   // Filter slides based on authentication status
-  const filteredSlides = isSignedIn 
-    ? heroSlides.filter(slide => slide.id !== "welcome")
+  const filteredSlides = isSignedIn
+    ? heroSlides.filter((slide) => slide.id !== "welcome")
     : heroSlides;
 
   useEffect(() => {
     // Check initial auth state
     const checkAuth = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       setIsSignedIn(!!user);
       setIsLoading(false);
     };
@@ -137,7 +171,9 @@ export function Home() {
     checkAuth();
 
     // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
       setIsSignedIn(!!session?.user);
     });
 
@@ -146,7 +182,7 @@ export function Home() {
 
   useEffect(() => {
     if (filteredSlides.length === 0) return;
-    
+
     const timer = setInterval(() => {
       setActiveSlide((prev) => (prev + 1) % filteredSlides.length);
     }, 8000);
