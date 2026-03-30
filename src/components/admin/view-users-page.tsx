@@ -110,7 +110,7 @@ export function ViewUsersPage() {
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
-        .order('created_at', { ascending: false });
+        .order('updated_at', { ascending: false });
 
       if (error) {
         setError('Failed to fetch users: ' + error.message);
