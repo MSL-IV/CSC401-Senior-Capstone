@@ -225,9 +225,9 @@ function About() {
                                     <p style={{ color: "var(--text-secondary)" }}>
                                         <span className="font-semibold text-primary">Hours of Operation:</span>
                                         <br />
-                                        Mon – Fri: [Insert Hours Here]
+                                        Monday – Thursday: 10 AM - 5 PM
                                         <br />
-                                        Sat – Sun: [Insert Hours Here]
+                                        Friday: 10 AM - 4 PM
                                     </p>
                                 </div>
 
@@ -316,7 +316,7 @@ function About() {
                             <div>
                                 <h3 className="font-semibold text-lg">How can I gain access into the Makerspace?</h3>
                                 <p className="text-[var(--text-secondary)]">
-                                    All UTampa students, faculty, and staff can use their UTampa identification cards to get access into Makerspace during their reservation time.
+                                    Entry to the Makerspace requires the presence of an authorized staff or faculty member. Simply check the status indicator at the top left of the page.
                                 </p>
                             </div>
                             <div>
