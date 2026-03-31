@@ -111,8 +111,9 @@ export function KioskPage() {
         const row = tagRow as Record<string, unknown>;
         const nameValue = row[NAME_COLUMN];
         if (typeof nameValue === "string" || typeof nameValue === "number") {
-          friendlyName = String(nameValue);
-          setTagMap((prev) => ({ ...prev, [rawTag]: friendlyName }));
+          const nameString = String(nameValue);
+          friendlyName = nameString;
+          setTagMap((prev) => ({ ...prev, [rawTag]: nameString }));
         }
       }
 
