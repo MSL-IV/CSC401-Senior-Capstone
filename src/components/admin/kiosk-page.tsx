@@ -25,7 +25,6 @@ export function KioskPage() {
   const [loadingCheckouts, setLoadingCheckouts] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [submitMessage, setSubmitMessage] = useState<string | null>(null);
-  const [returningId, setReturningId] = useState<string | null>(null);
   const tagFieldRef = useRef<HTMLInputElement>(null);
 
   const emailIsValid = EMAIL_PATTERN.test(email.trim());
@@ -83,10 +82,9 @@ export function KioskPage() {
   };
 
   const addTag = async (value: string) => {
-    const trimmed = value.trim();
-    if (!trimmed) return;
+    const rawTag = normalizeTag(value);
+    if (!rawTag) return;
 
-    // Require valid email before persisting
     if (!emailIsValid) {
       setSubmitMessage("Valid email required before saving checkout.");
       return;
@@ -94,14 +92,18 @@ export function KioskPage() {
 
     setSubmitting(true);
     setSubmitMessage(null);
+
+    const checkoutEmail = email.trim();
+
     try {
-      // Resolve tag to equipment name if present
-      let displayTag = trimmed;
+      // Look up friendly name for display while keeping the raw tag for storage/uniqueness
       const { data: tagRow, error: lookupError } = await supabase
         .from(TAG_LOOKUP_TABLE)
         .select("*")
-        .eq(TAG_COLUMN, trimmed)
+        .eq(TAG_COLUMN, rawTag)
         .maybeSingle();
+
+      let friendlyName: string | null = null;
 
       if (lookupError) {
         console.warn(`RFID lookup failed from ${TAG_LOOKUP_TABLE}:`, lookupError.message);
@@ -109,19 +111,60 @@ export function KioskPage() {
         const row = tagRow as Record<string, unknown>;
         const nameValue = row[NAME_COLUMN];
         if (typeof nameValue === "string" || typeof nameValue === "number") {
-          displayTag = String(nameValue);
-          setTagMap((prev) => ({
-            ...prev,
-            [normalizeTag(trimmed)]: displayTag,
-          }));
+          friendlyName = String(nameValue);
+          setTagMap((prev) => ({ ...prev, [rawTag]: friendlyName }));
         }
       }
 
+      // Prevent duplicate checkouts and enable scan-to-return.
+      // Match against raw tag and any friendly name already stored in historical rows.
+      const overlapTags = [rawTag];
+      const noLeadingZeros = rawTag.replace(/^0+/, "");
+      if (noLeadingZeros && noLeadingZeros !== rawTag) overlapTags.push(noLeadingZeros);
+      if (friendlyName && friendlyName !== rawTag) overlapTags.push(friendlyName);
+
+      const { data: existingRows, error: existingError } = await supabase
+        .from("kiosk_checkouts")
+        .select("*")
+        .overlaps("tags", overlapTags)
+        .neq("status", "returned")
+        .limit(1);
+
+      if (existingError) {
+        setSubmitMessage(`Failed to check existing checkouts: ${existingError.message}`);
+        return;
+      }
+
+      const existing = (existingRows?.[0] ?? null) as CheckoutRecord | null;
+
+      if (existing) {
+        if (existing.user_email !== checkoutEmail) {
+          setSubmitMessage(`Tag is already checked out by ${existing.user_email}.`);
+          return;
+        }
+
+        // Same user re-scanned: mark returned
+        const { error: returnError } = await supabase
+          .from("kiosk_checkouts")
+          .update({ status: "returned" })
+          .eq("id", existing.id);
+
+        if (returnError) {
+          setSubmitMessage(`Failed to return item: ${returnError.message}`);
+          return;
+        }
+
+        setCheckouts((prev) => prev.filter((c) => c.id !== existing.id));
+        setSubmitMessage(`Returned tag ${resolveTagLabel(rawTag)} for ${checkoutEmail}.`);
+        return;
+      }
+
+      // No active checkout found: create new record
       const { data, error } = await supabase
         .from("kiosk_checkouts")
         .insert({
-          user_email: email.trim(),
-          tags: [displayTag],
+          user_email: checkoutEmail,
+          tags: [rawTag],
           status: "open",
         })
         .select()
@@ -134,10 +177,10 @@ export function KioskPage() {
 
       if (data) {
         setCheckouts((prev) => [data as CheckoutRecord, ...prev]);
-        await loadTagNames([displayTag]);
+        await loadTagNames([rawTag]);
       }
 
-      setSubmitMessage(`Saved tag ${displayTag} to Supabase`);
+      setSubmitMessage(`Saved tag ${resolveTagLabel(rawTag)} to Supabase`);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unexpected error";
       setSubmitMessage(`Failed to save: ${message}`);
@@ -157,29 +200,6 @@ export function KioskPage() {
 
     await addTag(tagInput);
     setTagInput("");
-    tagFieldRef.current?.focus();
-  };
-
-  const handleReturn = async (checkoutId: string) => {
-    setReturningId(checkoutId);
-    setSubmitMessage(null);
-    const { error } = await supabase
-      .from("kiosk_checkouts")
-      .update({ status: "returned" })
-      .eq("id", checkoutId);
-
-    if (error) {
-      setSubmitMessage(`Failed to mark returned: ${error.message}`);
-    } else {
-      setCheckouts((prev) => prev.filter((c) => c.id !== checkoutId));
-      setSubmitMessage("Item marked returned and hidden from active list");
-    }
-    setReturningId(null);
-  };
-
-  const clearSession = () => {
-    setTagInput("");
-    setEmail("");
     tagFieldRef.current?.focus();
   };
 
@@ -306,13 +326,9 @@ export function KioskPage() {
                       <span className="text-sm font-semibold text-[var(--text-secondary)]">
                         {new Date(checkout.created_at ?? Date.now()).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
                       </span>
-                      <button
-                        onClick={() => handleReturn(checkout.id)}
-                        disabled={returningId === checkout.id}
-                        className="rounded-full bg-emerald-600 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-white transition hover:opacity-90 disabled:opacity-50 disabled:bg-emerald-400"
-                      >
-                        {returningId === checkout.id ? "Returning..." : "Return"}
-                      </button>
+                      <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-amber-800">
+                        Return by rescanning
+                      </span>
                     </div>
                     <div className="space-y-2">
                       <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--text-secondary)]">Email</p>
@@ -385,7 +401,7 @@ export function KioskPage() {
             </div>
             <div className="flex items-start gap-2">
               <span className="mt-1 inline-flex h-2 w-2 rounded-full bg-[var(--secondary)]" aria-hidden />
-              <p>Email will be paired with scanned tags when the checkout submission flow is implemented.</p>
+              <p>Each tag can only be checked out by one email at a time. Re-scan the same tag with the original email to return it.</p>
             </div>
           </div>
         </aside>
