@@ -14,7 +14,7 @@ type UserRecord = {
   role: UserRole;
   status: UserStatus;
   joinedDate: string;
-  lastActive: string;
+  lastLogin: string;
   trainingsCompleted: number;
 };
 
@@ -26,7 +26,7 @@ type DatabaseUser = {
   role: UserRole;
   status: UserStatus;
   created_at: string;
-  updated_at: string;
+  last_active: string | null;
   student_id: string | null;
 };
 
@@ -110,7 +110,7 @@ export function ViewUsersPage() {
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
-        .order('updated_at', { ascending: false });
+        .order('last_active', { ascending: false });
 
       if (error) {
         setError('Failed to fetch users: ' + error.message);
@@ -132,11 +132,13 @@ export function ViewUsersPage() {
             day: 'numeric',
             year: 'numeric'
           }),
-          lastActive: new Date(dbUser.updated_at).toLocaleDateString('en-US', {
-            month: 'short',
-            day: 'numeric',
-            year: 'numeric'
-          }),
+          lastLogin: dbUser.last_active
+            ? new Date(dbUser.last_active).toLocaleDateString('en-US', {
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric'
+              })
+            : 'Never',
           trainingsCompleted: 0 // TODO: Calculate from training records when implemented
         };
       });
@@ -607,7 +609,7 @@ export function ViewUsersPage() {
                   <th className="px-4 py-3">Role</th>
                   <th className="px-4 py-3">Training</th>
                   <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3">Last Active</th>
+                  <th className="px-4 py-3">Last Login</th>
                   <th className="px-4 py-3 text-right">Actions</th>
                 </tr>
               </thead>
@@ -645,7 +647,7 @@ export function ViewUsersPage() {
                       </span>
                     </td>
                     <td className="px-4 py-4 text-[var(--text-secondary)]">
-                      {user.lastActive}
+                      {user.lastLogin}
                     </td>
                     <td className="px-4 py-4 text-right">
                       {isFacultyOrAdmin(currentUserRole) && (

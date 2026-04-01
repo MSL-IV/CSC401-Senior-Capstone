@@ -28,14 +28,28 @@ export async function updateSession(request: NextRequest) {
   )
 
   // Refresh auth token if a session cookie exists; ignore missing-refresh-token errors.
+  let currentUser = null
   try {
-    await supabase.auth.getUser()
+    const { data } = await supabase.auth.getUser()
+    currentUser = data?.user ?? null
   } catch (err) {
     const message = err instanceof Error ? err.message : ''
     if (!message.toLowerCase().includes('refresh token')) {
       throw err
     }
     // No valid session cookie present; proceed without failing the request.
+  }
+
+  // Update last_active for signed-in users
+  if (currentUser) {
+    const { error: updateError } = await supabase
+      .from('profiles')
+      .update({ last_active: new Date().toISOString() })
+      .eq('id', currentUser.id)
+
+    if (updateError) {
+      console.error('Failed to update last_active:', updateError.message)
+    }
   }
 
   return supabaseResponse

@@ -21,8 +21,13 @@ export async function login(formData: FormData) {
     redirect('/error')
   }
 
-  // Redirect kiosk users directly to the kiosk page
+  // Update last_active timestamp and redirect kiosk users
   if (authData.user) {
+    await supabase
+      .from('profiles')
+      .update({ last_active: new Date().toISOString() })
+      .eq('id', authData.user.id)
+
     const { data: profile } = await supabase
       .from('profiles')
       .select('role')
