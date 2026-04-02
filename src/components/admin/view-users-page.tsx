@@ -14,7 +14,7 @@ type UserRecord = {
   role: UserRole;
   status: UserStatus;
   joinedDate: string;
-  lastActive: string;
+  lastLogin: string;
   trainingsCompleted: number;
 };
 
@@ -26,7 +26,7 @@ type DatabaseUser = {
   role: UserRole;
   status: UserStatus;
   created_at: string;
-  updated_at: string;
+  last_active: string | null;
   student_id: string | null;
 };
 
@@ -68,12 +68,14 @@ export function ViewUsersPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [updateLoading, setUpdateLoading] = useState<string | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | UserStatus>("all");
   const [roleFilter, setRoleFilter] = useState<"all" | UserRole>("all");
   const [managingUserId, setManagingUserId] = useState<string | null>(null);
   const [certCounts, setCertCounts] = useState<Record<string, { count: number; machines: string[] }>>({});
   const [currentUserRole, setCurrentUserRole] = useState<UserRole | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [allMachines, setAllMachines] = useState<{ id: string; name: string }[]>([]);
   const [certActionLoading, setCertActionLoading] = useState<string | null>(null);
 
@@ -85,6 +87,8 @@ export function ViewUsersPage() {
         setError('Authentication required');
         return;
       }
+
+      setCurrentUserId(user.id);
 
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
@@ -110,7 +114,7 @@ export function ViewUsersPage() {
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
-        .order('created_at', { ascending: false });
+        .order('last_active', { ascending: false });
 
       if (error) {
         setError('Failed to fetch users: ' + error.message);
@@ -132,11 +136,13 @@ export function ViewUsersPage() {
             day: 'numeric',
             year: 'numeric'
           }),
-          lastActive: new Date(dbUser.updated_at).toLocaleDateString('en-US', {
-            month: 'short',
-            day: 'numeric',
-            year: 'numeric'
-          }),
+          lastLogin: dbUser.last_active
+            ? new Date(dbUser.last_active).toLocaleDateString('en-US', {
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric'
+              })
+            : 'Never',
           trainingsCompleted: 0 // TODO: Calculate from training records when implemented
         };
       });
@@ -296,6 +302,54 @@ export function ViewUsersPage() {
     }
   };
 
+  const handleDeleteUser = async (user: UserRecord) => {
+    if (user.id === currentUserId) {
+      setError("You cannot remove your own admin account.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Remove ${user.name}? This will permanently delete their account, profile, reservations, and training certificates.`,
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setDeleteLoading(user.id);
+    setError(null);
+
+    try {
+      const response = await fetch(`/api/admin/users/${encodeURIComponent(user.id)}`, {
+        method: "DELETE",
+      });
+      const payload = (await response.json().catch(() => null)) as
+        | { error?: string; details?: string[] }
+        | null;
+
+      if (!response.ok) {
+        const message = payload?.details?.length
+          ? `${payload.error} ${payload.details.join(" ")}`
+          : payload?.error || "Failed to remove user.";
+        setError(message);
+        return;
+      }
+
+      setUsers((prev) => prev.filter((entry) => entry.id !== user.id));
+      setCertCounts((prev) => {
+        const next = { ...prev };
+        delete next[user.id];
+        return next;
+      });
+      setManagingUserId(null);
+    } catch (err) {
+      console.error("Unexpected error deleting user:", err);
+      setError("An unexpected error occurred while removing the user.");
+    } finally {
+      setDeleteLoading(null);
+    }
+  };
+
   const handleGrantCertificate = async (userId: string, machineName: string) => {
     setCertActionLoading(machineName);
     try {
@@ -314,9 +368,12 @@ export function ViewUsersPage() {
       }
 
       await fetchTrainingCounts();
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error granting certificate:', err);
-      setError('Failed to grant certificate: ' + err.message);
+      setError(
+        'Failed to grant certificate: ' +
+          (err instanceof Error ? err.message : 'Unexpected error'),
+      );
     } finally {
       setCertActionLoading(null);
     }
@@ -337,9 +394,12 @@ export function ViewUsersPage() {
       }
 
       await fetchTrainingCounts();
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error revoking certificate:', err);
-      setError('Failed to revoke certificate: ' + err.message);
+      setError(
+        'Failed to revoke certificate: ' +
+          (err instanceof Error ? err.message : 'Unexpected error'),
+      );
     } finally {
       setCertActionLoading(null);
     }
@@ -379,9 +439,12 @@ export function ViewUsersPage() {
       }
 
       await fetchTrainingCounts();
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error overriding all certificates:', err);
-      setError('Failed to override certificates: ' + err.message);
+      setError(
+        'Failed to override certificates: ' +
+          (err instanceof Error ? err.message : 'Unexpected error'),
+      );
     } finally {
       setUpdateLoading(null);
     }
@@ -434,7 +497,7 @@ export function ViewUsersPage() {
         accent: "text-rose-600",
       },
     ];
-  }, [users]);
+  }, [certCounts, users]);
 
   if (loading) {
     return (
@@ -607,7 +670,7 @@ export function ViewUsersPage() {
                   <th className="px-4 py-3">Role</th>
                   <th className="px-4 py-3">Training</th>
                   <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3">Last Active</th>
+                  <th className="px-4 py-3">Last Login</th>
                   <th className="px-4 py-3 text-right">Actions</th>
                 </tr>
               </thead>
@@ -645,17 +708,21 @@ export function ViewUsersPage() {
                       </span>
                     </td>
                     <td className="px-4 py-4 text-[var(--text-secondary)]">
-                      {user.lastActive}
+                      {user.lastLogin}
                     </td>
                     <td className="px-4 py-4 text-right">
                       {isFacultyOrAdmin(currentUserRole) && (
                         <button
                           type="button"
                           onClick={() => setManagingUserId(user.id)}
-                          disabled={updateLoading === user.id}
-                          className={`rounded-full border border-[var(--border)] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)] transition hover:border-[var(--secondary)] hover:text-[var(--text-primary)] ${updateLoading === user.id ? 'opacity-50 cursor-not-allowed' : ''}`}
+                          disabled={updateLoading === user.id || deleteLoading === user.id}
+                          className={`rounded-full border border-[var(--border)] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)] transition hover:border-[var(--secondary)] hover:text-[var(--text-primary)] ${updateLoading === user.id || deleteLoading === user.id ? 'opacity-50 cursor-not-allowed' : ''}`}
                         >
-                          {updateLoading === user.id ? 'Updating...' : 'Manage'}
+                          {deleteLoading === user.id
+                            ? 'Removing...'
+                            : updateLoading === user.id
+                              ? 'Updating...'
+                              : 'Manage'}
                         </button>
                       )}
                     </td>
@@ -742,6 +809,26 @@ export function ViewUsersPage() {
                             Kiosk
                           </button>
                         </div>
+                      </div>
+                    )}
+
+                    {canModifyUserRoles(currentUserRole) && (
+                      <div>
+                        <p className="text-sm text-gray-600 mb-2">Danger Zone</p>
+                        <button
+                          onClick={() => handleDeleteUser(user)}
+                          disabled={deleteLoading === user.id || user.id === currentUserId}
+                          className="w-full px-3 py-2 text-sm bg-red-100 text-red-700 rounded hover:bg-red-200 disabled:opacity-50"
+                        >
+                          {deleteLoading === user.id
+                            ? "Removing User..."
+                            : user.id === currentUserId
+                              ? "You Cannot Remove Yourself"
+                              : "Remove User"}
+                        </button>
+                        <p className="mt-2 text-xs text-gray-500">
+                          This permanently deletes the user&apos;s account, profile, reservations, and training certificates.
+                        </p>
                       </div>
                     )}
 

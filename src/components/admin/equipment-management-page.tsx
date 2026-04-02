@@ -129,7 +129,7 @@ export function EquipmentManagementPage() {
     try {
       const { error } = await supabase
         .from(KIOSK_TABLE)
-        .update({ status: "returned", returned_at: new Date().toISOString() })
+        .update({ status: "returned" })
         .eq("id", checkoutId);
 
       if (error) {
