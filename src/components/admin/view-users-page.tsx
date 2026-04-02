@@ -575,7 +575,7 @@ export function ViewUsersPage() {
       {
         title: "Awaiting Training",
         value: totals.pending,
-        change: "Send reminders",
+        change: "Users pending training completion",
         accent: "text-amber-600",
       },
       {
