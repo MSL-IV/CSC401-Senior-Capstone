@@ -85,6 +85,9 @@ export function LoginPage() {
     setSignupError("");
     setSignupSuccess(false);
 
+    const trimmedEmail = signupData.email.trim();
+    const trimmedStudentId = signupData.student_id.trim();
+
     // Validate passwords match
     if (signupData.password !== signupData.confirmPassword) {
       setSignupError("Passwords do not match.");
@@ -100,21 +103,48 @@ export function LoginPage() {
     }
 
     try {
-      const { data, error } = await supabase.auth.signUp({
-        email: signupData.email,
+      const precheckResponse = await fetch("/api/auth/signup/precheck", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          studentId: trimmedStudentId,
+        }),
+      });
+
+      if (precheckResponse.status === 409) {
+        const payload = (await precheckResponse.json().catch(() => null)) as
+          | { error?: string }
+          | null;
+        setSignupError(
+          payload?.error ||
+            "That student ID is already registered. Use a different student ID or contact an admin.",
+        );
+        return;
+      }
+
+      const { error } = await supabase.auth.signUp({
+        email: trimmedEmail,
         password: signupData.password,
         options: {
           data: {
-            first_name: signupData.first_name,
-            last_name: signupData.last_name,
-            student_id: signupData.student_id,
+            first_name: signupData.first_name.trim(),
+            last_name: signupData.last_name.trim(),
+            student_id: trimmedStudentId,
           },
         },
       });
 
       if (error) {
         console.error('Supabase signup error:', error);
-        setSignupError(`Registration failed: ${error.message}`);
+        if (error.message === "Database error saving new user") {
+          setSignupError(
+            "Registration failed. That student ID may already be registered, or the database rejected the profile record.",
+          );
+        } else {
+          setSignupError(`Registration failed: ${error.message}`);
+        }
       } else {
         setSignupSuccess(true);
         // Reset form
