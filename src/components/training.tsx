@@ -4,6 +4,18 @@ import { Navbar } from "@/components/navbar";
 import { SiteFooter } from "@/components/site-footer";
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/utils/supabase/client";
+import {
+  DEFAULT_TRAINING_VIDEO_URL,
+  TRAINING_CONTENT,
+} from "@/data/training-content";
+import {
+  canonicalMachineName,
+  getActualMachineNamesForTraining,
+  getRepresentativeCertificateForTraining,
+  getTrainingCleanupMachineNames,
+  hasTrainingCertificate,
+  type NamedMachine,
+} from "@/utils/training-machines";
 
 type TrainingCertificate = {
   id: string;
@@ -18,70 +30,49 @@ type TrainingCertificate = {
 type TrainingMachine = {
   id: string;
   name: string;
-  certificateMachineName: string;
+  certificateMachineNames: string[];
 };
-
-type QuizQuestion = {
-  id: string;
-  question: string;
-  options: string[];
-  answer: string;
-};
-
-function canonicalMachineName(name: string): string {
-  return name
-    .trim()
-    .replace(/\s*\(\d+\)\s*$/i, "")
-    .replace(/\s*[-_#]?\s*\d+\s*$/i, "")
-    .replace(/\s+/g, " ")
-    .trim();
-}
 
 const FALLBACK_EQUIPMENT: TrainingMachine[] = [
-  { id: "laser-cutter", name: "Laser Cutter", certificateMachineName: "Laser Cutter" },
-  { id: "milling-machine", name: "Milling Machine", certificateMachineName: "Milling Machine" },
-  { id: "3d-printer", name: "3D Printer", certificateMachineName: "3D Printer" },
-  { id: "ultimaker", name: "UltiMaker", certificateMachineName: "UltiMaker" },
-  { id: "heat-press", name: "Heat Press", certificateMachineName: "Heat Press" },
-  { id: "vinyl-cutter", name: "Vinyl Cutter", certificateMachineName: "Vinyl Cutter" },
-  { id: "soldering-station", name: "Soldering Station", certificateMachineName: "Soldering Station" },
-];
-
-const QUIZ_QUESTIONS: QuizQuestion[] = [
   {
-    id: "q1",
-    question: "What is the first thing you should check before operating a machine?",
-    options: ["Safety status and workspace readiness", "Maximum print speed", "Playlist volume"],
-    answer: "Safety status and workspace readiness",
+    id: "laser-cutter",
+    name: "Laser Cutter",
+    certificateMachineNames: getActualMachineNamesForTraining("Laser Cutter"),
   },
   {
-    id: "q2",
-    question: "When should you stop and ask staff for help?",
-    options: ["Only after finishing", "If something looks unsafe or unfamiliar", "Never"],
-    answer: "If something looks unsafe or unfamiliar",
+    id: "milling-machine",
+    name: "Milling Machine",
+    certificateMachineNames: getActualMachineNamesForTraining("Milling Machine"),
   },
   {
-    id: "q3",
-    question: "How should PPE be handled during machine use?",
-    options: ["Optional if experienced", "Used as required for the process", "Only during setup"],
-    answer: "Used as required for the process",
+    id: "3d-printer",
+    name: "3D Printer",
+    certificateMachineNames: getActualMachineNamesForTraining("3D Printer"),
   },
   {
-    id: "q4",
-    question: "What should you do after finishing a machine session?",
-    options: ["Leave immediately", "Clean up and follow shutdown steps", "Keep the machine running"],
-    answer: "Clean up and follow shutdown steps",
+    id: "ultimaker",
+    name: "UltiMaker",
+    certificateMachineNames: getActualMachineNamesForTraining("UltiMaker"),
   },
   {
-    id: "q5",
-    question: "What is the minimum score needed to pass this training quiz?",
-    options: ["60%", "70%", "80%"],
-    answer: "80%",
+    id: "heat-press",
+    name: "Heat Press",
+    certificateMachineNames: getActualMachineNamesForTraining("Heat Press"),
+  },
+  {
+    id: "vinyl-cutter",
+    name: "Vinyl Cutter",
+    certificateMachineNames: getActualMachineNamesForTraining("Vinyl Cutter"),
+  },
+  {
+    id: "soldering-station",
+    name: "Soldering Station",
+    certificateMachineNames: getActualMachineNamesForTraining("Soldering Station"),
   },
 ];
 
 const PASSING_SCORE = 80;
-const TEMP_VIDEO_URL = "https://www.pexels.com/download/video/7035591/";
+const TRAINING_MACHINES_TABLE = "training_machines";
 const supabase = createClient();
 
 export function Training() {
@@ -110,6 +101,25 @@ export function Training() {
     () => equipment.find((eq) => eq.name === activeEquipment) ?? null,
     [activeEquipment, equipment]
   );
+  const trainingContent = useMemo(
+    () => {
+      const trainingName = selectedMachine?.name ?? activeEquipment;
+      if (!trainingName) return null;
+
+      const directMatch = TRAINING_CONTENT[trainingName];
+      if (directMatch) return directMatch;
+
+      const normalizedName = canonicalMachineName(trainingName);
+      const fallbackMatch = Object.entries(TRAINING_CONTENT).find(
+        ([name]) => canonicalMachineName(name) === normalizedName
+      );
+
+      return fallbackMatch?.[1] ?? null;
+    },
+    [activeEquipment, selectedMachine]
+  );
+  const quizQuestions = trainingContent?.questions ?? [];
+  const trainingVideoUrl = trainingContent?.videoUrl ?? DEFAULT_TRAINING_VIDEO_URL;
 
   useEffect(() => {
     async function loadUser() {
@@ -130,10 +140,14 @@ export function Training() {
     async function loadEquipment() {
       setLoadingEquipment(true);
 
-      const { data, error: equipmentError } = await supabase
-        .from("machines")
-        .select("id, name")
-        .order("name", { ascending: true });
+      const [{ data, error: equipmentError }, { data: machineData, error: machineError }] =
+        await Promise.all([
+          supabase
+            .from(TRAINING_MACHINES_TABLE)
+            .select("id, name")
+            .order("name", { ascending: true }),
+          supabase.from("machines").select("name").order("name", { ascending: true }),
+        ]);
 
       if (equipmentError) {
         console.error("Failed to load machines:", equipmentError.message);
@@ -142,11 +156,23 @@ export function Training() {
         return;
       }
 
+      if (machineError) {
+        console.error("Failed to load reservation machines:", machineError.message);
+      }
+
       if (!data || data.length === 0) {
         setEquipment(FALLBACK_EQUIPMENT);
         setLoadingEquipment(false);
         return;
       }
+
+      const reservableMachines: NamedMachine[] =
+        (machineData ?? [])
+          .map((machine) => {
+            const rawName = typeof machine.name === "string" ? machine.name.trim() : "";
+            return rawName ? { name: rawName } : null;
+          })
+          .filter((machine): machine is NamedMachine => Boolean(machine)) ?? [];
 
       const dedupedByName = new Map<string, TrainingMachine>();
 
@@ -155,12 +181,14 @@ export function Training() {
         if (!rawName) continue;
 
         const canonical = canonicalMachineName(rawName);
-        const normalized = canonical.toLowerCase();
-        if (!dedupedByName.has(normalized)) {
-          dedupedByName.set(normalized, {
+        if (!dedupedByName.has(canonical)) {
+          dedupedByName.set(canonical, {
             id: String(machine.id),
-            name: canonical,
-            certificateMachineName: rawName,
+            name: rawName,
+            certificateMachineNames: getActualMachineNamesForTraining(
+              rawName,
+              reservableMachines,
+            ),
           });
         }
       }
@@ -202,24 +230,25 @@ export function Training() {
         setError("Couldn't fetch training certificate. Please try again.");
       } else {
         const certs = (data as TrainingCertificate[] | null) ?? [];
-        const matching = certs.filter(
-          (c) => canonicalMachineName(c.machine_name ?? "") === activeEquipment
+        const cert = getRepresentativeCertificateForTraining(
+          activeEquipment,
+          certs,
+          selectedMachine?.certificateMachineNames.map((name) => ({ name })) ?? [],
         );
-        matching.sort((a, b) => {
-          const aTime = a.completed_at ? new Date(a.completed_at).getTime() : 0;
-          const bTime = b.completed_at ? new Date(b.completed_at).getTime() : 0;
-          return bTime - aTime;
-        });
-        const cert = matching[0] ?? null;
-        setCertificate(cert);
-        setCertificateUnlocked(Boolean(cert?.completed_at ?? cert?.id));
+        setCertificate((cert as TrainingCertificate | null) ?? null);
+        setCertificateUnlocked(
+          hasTrainingCertificate(activeEquipment, certs, {
+            machines:
+              selectedMachine?.certificateMachineNames.map((name) => ({ name })) ?? [],
+          }),
+        );
       }
 
       setLoadingCert(false);
     }
 
     fetchCertificate();
-  }, [userId, activeEquipment]);
+  }, [userId, activeEquipment, selectedMachine]);
 
   const handleSearch = () => {
     if (!selectedEquipment) {
@@ -235,25 +264,30 @@ export function Training() {
   };
 
   const handleQuizSubmit = () => {
+    if (quizQuestions.length === 0) {
+      setError("Training quiz content is not configured for this machine.");
+      return;
+    }
+
     if (!videoWatched) {
       setError("Watch the full training video before taking the quiz.");
       return;
     }
 
     const answeredCount = Object.keys(answers).length;
-    if (answeredCount < QUIZ_QUESTIONS.length) {
+    if (answeredCount < quizQuestions.length) {
       setError("Please answer all quiz questions before submitting.");
       return;
     }
 
     let correct = 0;
-    for (const question of QUIZ_QUESTIONS) {
+    for (const question of quizQuestions) {
       if (answers[question.id] === question.answer) {
         correct += 1;
       }
     }
 
-    const score = Math.round((correct / QUIZ_QUESTIONS.length) * 100);
+    const score = Math.round((correct / quizQuestions.length) * 100);
     setQuizScore(score);
     setQuizSubmitted(true);
     setError(null);
@@ -289,60 +323,59 @@ export function Training() {
     expiry.setMonth(expiry.getMonth() + 12);
     const expiresAt = expiry.toISOString();
 
-    const newId =
-      typeof crypto !== "undefined" && crypto.randomUUID
-        ? crypto.randomUUID()
-        : `${Date.now()}`;
+    const trainingCertificateName = selectedMachine?.name ?? activeEquipment;
+    const certificateMachineNames =
+      selectedMachine?.certificateMachineNames.length
+        ? selectedMachine.certificateMachineNames
+        : getActualMachineNamesForTraining(trainingCertificateName);
+    const cleanupMachineNames = getTrainingCleanupMachineNames(activeEquipment, [
+      ...certificateMachineNames.map((name) => ({ name })),
+    ]);
 
-    const machineNameForCertificate =
-      selectedMachine?.certificateMachineName ?? activeEquipment;
-
-    const { data: updated, error: updateError } = await supabase
+    const { error: deleteError } = await supabase
       .from("training_certificates")
-      .update({
+      .delete()
+      .eq("user_id", userId)
+      .in("machine_name", cleanupMachineNames);
+
+    if (deleteError) {
+      console.error("Training certificate cleanup error:", deleteError);
+      setError(`Unable to save certificate. ${deleteError.message ?? "Please try again."}`);
+      setLoadingCert(false);
+      return;
+    }
+
+    const { data: inserted, error: insertError } = await supabase
+      .from("training_certificates")
+      .insert({
+        id:
+          typeof crypto !== "undefined" && crypto.randomUUID
+            ? crypto.randomUUID()
+            : `${Date.now()}`,
+        user_id: userId,
+        machine_name: trainingCertificateName,
         completed_at: now,
         expires_at: expiresAt,
         issued_by: issuedByValue,
         score: quizScore,
       })
-      .eq("user_id", userId)
-      .eq("machine_name", machineNameForCertificate)
       .select();
 
-    let savedCert: TrainingCertificate | null = null;
-
-    if (updateError) {
-      console.error("Training certificate update error:", updateError);
+    if (insertError) {
+      console.error("Training certificate insert error:", insertError);
+      setError(`Unable to save certificate. ${insertError.message ?? "Please try again."}`);
+      setLoadingCert(false);
+      return;
     }
 
-    if (updated && updated.length > 0) {
-      savedCert = updated[0] as TrainingCertificate;
-    } else {
-      const { data: inserted, error: insertError } = await supabase
-        .from("training_certificates")
-        .insert({
-          id: newId,
-          user_id: userId,
-          machine_name: machineNameForCertificate,
-          completed_at: now,
-          expires_at: expiresAt,
-          issued_by: issuedByValue,
-          score: quizScore,
-        })
-        .select()
-        .single();
+    const savedCert =
+      getRepresentativeCertificateForTraining(
+        activeEquipment,
+        (inserted as TrainingCertificate[] | null) ?? [],
+        certificateMachineNames.map((name) => ({ name })),
+      ) ?? null;
 
-      if (insertError) {
-        console.error("Training certificate insert error:", insertError);
-        setError(`Unable to save certificate. ${insertError.message ?? "Please try again."}`);
-        setLoadingCert(false);
-        return;
-      }
-
-      savedCert = inserted as TrainingCertificate;
-    }
-
-    setCertificate(savedCert);
+    setCertificate((savedCert as TrainingCertificate | null) ?? null);
     setCertificateUnlocked(true);
     setLoadingCert(false);
   };
@@ -424,19 +457,19 @@ export function Training() {
                       Required Video + Quiz
                     </h2>
                     <p className="text-[15px] leading-relaxed text-[var(--text-secondary)]">
-                      Temporary training content is enabled right now. Watch the full video to unlock the quiz,
-                      then pass with at least {PASSING_SCORE}%.
+                      Watch the assigned training video, then pass the quiz with at least {PASSING_SCORE}% to
+                      unlock certification.
                     </p>
                   </div>
 
                   <div className="mt-6 rounded-2xl border border-[var(--border)] bg-[var(--background)] p-4">
-                    <p className="mb-3 text-sm font-semibold text-[var(--text-primary)]">1) Locked Training Video</p>
+                    <p className="mb-3 text-sm font-semibold text-[var(--text-primary)]">1) Training Video</p>
                     <video
                       controls
                       onEnded={() => setVideoWatched(true)}
                       className="h-auto w-full rounded-lg bg-black"
                     >
-                      <source src={TEMP_VIDEO_URL} type="video/mp4" />
+                      <source src={trainingVideoUrl} type="video/mp4" />
                       Your browser does not support the video tag.
                     </video>
                     <p className="mt-2 text-xs text-[var(--text-secondary)]">
@@ -453,7 +486,7 @@ export function Training() {
                     )}
 
                     <div className={`${!videoWatched ? "pointer-events-none opacity-50" : ""} space-y-4`}>
-                      {QUIZ_QUESTIONS.map((question) => (
+                      {quizQuestions.map((question) => (
                         <div key={question.id} className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">
                           <p className="text-sm font-medium text-[var(--text-primary)]">{question.question}</p>
                           <div className="mt-2 space-y-1">

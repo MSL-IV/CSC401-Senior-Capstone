@@ -5,6 +5,10 @@ import { Navbar } from "@/components/navbar";
 import { SiteFooter } from "@/components/site-footer";
 import { AccountReservations } from "@/components/account-reservations";
 import { formatInEastern } from "@/utils/time";
+import {
+  canonicalMachineName,
+  getTrainingMachineNameForCertificate,
+} from "@/utils/training-machines";
 
 type Profile = {
   first_name?: string | null;
@@ -24,7 +28,7 @@ type TrainingCertificate = {
 export default async function AccountPage({
   searchParams,
 }: {
-  searchParams?: { [key: string]: string | string[] | undefined } | Promise<{ [key: string]: string | string[] | undefined }>;
+  searchParams?: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
   const supabase = await createClient();
   const {
@@ -82,10 +86,31 @@ export default async function AccountPage({
       reservationId: res.reservation_id ?? res.start ?? res.machine ?? crypto.randomUUID(),
     })) ?? [];
 
-  const certifications =
-    trainingCerts?.map((cert) => ({
+  const certificationMap = new Map<
+    string,
+    {
+      id: string;
+      name: string;
+      status: string;
+      date: string;
+      score: number | null;
+      completedAt: number;
+    }
+  >();
+
+  (trainingCerts ?? []).forEach((cert) => {
+    const name = getTrainingMachineNameForCertificate(cert.machine_name ?? "Training");
+    const key = canonicalMachineName(name);
+    const completedAt = cert.completed_at ? new Date(cert.completed_at).getTime() : 0;
+    const existing = certificationMap.get(key);
+
+    if (existing && existing.completedAt >= completedAt) {
+      return;
+    }
+
+    certificationMap.set(key, {
       id: cert.id,
-      name: cert.machine_name ?? "Training",
+      name,
       status: cert.completed_at ? "Completed" : "Pending",
       date: cert.completed_at
         ? formatInEastern(new Date(cert.completed_at), {
@@ -95,9 +120,15 @@ export default async function AccountPage({
           })
         : "—",
       score: cert.score,
-    })) ?? [];
+      completedAt,
+    });
+  });
 
-  const resolvedParams = searchParams instanceof Promise ? await searchParams : searchParams;
+  const certifications = Array.from(certificationMap.values()).map(
+    ({ completedAt, ...certification }) => certification,
+  );
+
+  const resolvedParams = searchParams ? await searchParams : undefined;
   const showCancel = resolvedParams?.cancel === "1";
   const showChange = resolvedParams?.change === "1";
 

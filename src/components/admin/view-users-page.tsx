@@ -3,6 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/utils/supabase/client";
 import { canModifyUserRoles, isFacultyOrAdmin } from "@/utils/permissions";
+import {
+  getTrainingCleanupMachineNames,
+  hasTrainingCertificate,
+  type NamedMachine,
+} from "@/utils/training-machines";
 
 type UserStatus = "active" | "pending" | "suspended";
 type UserRole = "student" | "faculty" | "admin" | "kiosk";
@@ -31,6 +36,7 @@ type DatabaseUser = {
 };
 
 const supabase = createClient();
+const TRAINING_MACHINES_TABLE = "training_machines";
 
 const statusStyles: Record<
   UserStatus,
@@ -77,6 +83,7 @@ export function ViewUsersPage() {
   const [currentUserRole, setCurrentUserRole] = useState<UserRole | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [allMachines, setAllMachines] = useState<{ id: string; name: string }[]>([]);
+  const [reservableMachines, setReservableMachines] = useState<NamedMachine[]>([]);
   const [certActionLoading, setCertActionLoading] = useState<string | null>(null);
 
   // Fetch current user role
@@ -156,23 +163,57 @@ export function ViewUsersPage() {
 
   async function fetchMachines() {
     try {
-      const { data, error } = await supabase
-        .from('machines')
-        .select('id, name')
-        .order('name', { ascending: true });
+      const [
+        { data: trainingMachineData, error: trainingMachineError },
+        { data: machineData, error: machineError },
+      ] = await Promise.all([
+        supabase
+          .from(TRAINING_MACHINES_TABLE)
+          .select('id, name')
+          .order('name', { ascending: true }),
+        supabase.from('machines').select('name').order('name', { ascending: true }),
+      ]);
 
-      if (error) {
-        console.error('Machines fetch error:', error);
+      if (trainingMachineError) {
+        console.error('Training machines fetch error:', trainingMachineError);
         return;
       }
 
-      setAllMachines(data || []);
+      if (machineError) {
+        console.error('Machines fetch error:', machineError);
+      }
+
+      const resolvedTrainingMachines =
+        (trainingMachineData as { id: string; name: string }[] | null) ?? [];
+      const resolvedReservableMachines =
+        ((machineData as { name: string }[] | null) ?? [])
+          .map((machine) => {
+            const rawName = typeof machine.name === 'string' ? machine.name.trim() : '';
+            return rawName ? { name: rawName } : null;
+          })
+          .filter((machine): machine is NamedMachine => Boolean(machine));
+
+      setAllMachines(resolvedTrainingMachines);
+      setReservableMachines(resolvedReservableMachines);
+
+      return {
+        trainingMachines: resolvedTrainingMachines,
+        actualMachines: resolvedReservableMachines,
+      };
     } catch (err) {
       console.error('Unexpected error fetching machines:', err);
     }
+
+    return {
+      trainingMachines: [] as { id: string; name: string }[],
+      actualMachines: [] as NamedMachine[],
+    };
   }
 
-  async function fetchTrainingCounts() {
+  async function fetchTrainingCounts(
+    trainingMachines: { id: string; name: string }[] = allMachines,
+    actualMachines: NamedMachine[] = reservableMachines,
+  ) {
     try {
       const { data, error } = await supabase
         .from('training_certificates')
@@ -184,17 +225,37 @@ export function ViewUsersPage() {
         return;
       }
 
+      const certificatesByUser = new Map<
+        string,
+        { user_id: string; machine_name: string | null }[]
+      >();
+
+      ((data as { user_id: string; machine_name: string | null }[] | null) ?? []).forEach(
+        (row) => {
+          const entries = certificatesByUser.get(row.user_id) ?? [];
+          entries.push(row);
+          certificatesByUser.set(row.user_id, entries);
+        },
+      );
+
+      const trainingMachineOptions = trainingMachines.length
+        ? trainingMachines
+        : allMachines;
       const map: Record<string, { count: number; machines: string[] }> = {};
-      (data || []).forEach((row) => {
-        const userId = (row as { user_id: string }).user_id;
-        const machineName = (row as { machine_name: string | null }).machine_name;
-        if (!map[userId]) {
-          map[userId] = { count: 0, machines: [] };
-        }
-        map[userId].count += 1;
-        if (machineName) {
-          map[userId].machines.push(machineName);
-        }
+
+      certificatesByUser.forEach((userCertificates, userId) => {
+        const completedMachines = trainingMachineOptions
+          .map((machine) => machine.name)
+          .filter((machineName) =>
+            hasTrainingCertificate(machineName, userCertificates, {
+              machines: actualMachines,
+            }),
+          );
+
+        map[userId] = {
+          count: completedMachines.length,
+          machines: completedMachines,
+        };
       });
 
       setCertCounts(map);
@@ -272,9 +333,15 @@ export function ViewUsersPage() {
     async function loadUsers() {
       setLoading(true);
       await fetchCurrentUserRole();
+      const machineLists = (await fetchMachines()) ?? {
+        trainingMachines: [] as { id: string; name: string }[],
+        actualMachines: [] as NamedMachine[],
+      };
       await fetchUsers();
-      await fetchTrainingCounts();
-      await fetchMachines();
+      await fetchTrainingCounts(
+        machineLists.trainingMachines,
+        machineLists.actualMachines,
+      );
       setLoading(false);
     }
     
@@ -353,12 +420,29 @@ export function ViewUsersPage() {
   const handleGrantCertificate = async (userId: string, machineName: string) => {
     setCertActionLoading(machineName);
     try {
+      const cleanupMachineNames = getTrainingCleanupMachineNames(
+        machineName,
+        reservableMachines,
+      );
+      const now = new Date().toISOString();
+
+      const { error: deleteError } = await supabase
+        .from('training_certificates')
+        .delete()
+        .eq('user_id', userId)
+        .in('machine_name', cleanupMachineNames);
+
+      if (deleteError) {
+        setError('Failed to grant certificate: ' + deleteError.message);
+        return;
+      }
+
       const { error } = await supabase
         .from('training_certificates')
         .insert({
           user_id: userId,
           machine_name: machineName,
-          completed_at: new Date().toISOString(),
+          completed_at: now,
           issued_by: 'faculty_override',
         });
 
@@ -367,7 +451,7 @@ export function ViewUsersPage() {
         return;
       }
 
-      await fetchTrainingCounts();
+      await fetchTrainingCounts(allMachines, reservableMachines);
     } catch (err) {
       console.error('Error granting certificate:', err);
       setError(
@@ -382,18 +466,22 @@ export function ViewUsersPage() {
   const handleRevokeCertificate = async (userId: string, machineName: string) => {
     setCertActionLoading(machineName);
     try {
+      const cleanupMachineNames = getTrainingCleanupMachineNames(
+        machineName,
+        reservableMachines,
+      );
       const { error } = await supabase
         .from('training_certificates')
         .delete()
         .eq('user_id', userId)
-        .eq('machine_name', machineName);
+        .in('machine_name', cleanupMachineNames);
 
       if (error) {
         setError('Failed to revoke certificate: ' + error.message);
         return;
       }
 
-      await fetchTrainingCounts();
+      await fetchTrainingCounts(allMachines, reservableMachines);
     } catch (err) {
       console.error('Error revoking certificate:', err);
       setError(
@@ -419,11 +507,11 @@ export function ViewUsersPage() {
         return;
       }
 
-      // Insert new certificates for all machines
-      const certificates = allMachines.map(machine => ({
+      const now = new Date().toISOString();
+      const certificates = allMachines.map((machine) => ({
         user_id: userId,
         machine_name: machine.name,
-        completed_at: new Date().toISOString(),
+        completed_at: now,
         issued_by: 'faculty_override',
       }));
 
@@ -438,7 +526,7 @@ export function ViewUsersPage() {
         }
       }
 
-      await fetchTrainingCounts();
+      await fetchTrainingCounts(allMachines, reservableMachines);
     } catch (err) {
       console.error('Error overriding all certificates:', err);
       setError(
@@ -487,7 +575,7 @@ export function ViewUsersPage() {
       {
         title: "Awaiting Training",
         value: totals.pending,
-        change: "Send reminders",
+        change: "Users pending training completion",
         accent: "text-amber-600",
       },
       {
