@@ -5,6 +5,10 @@ import { SiteFooter } from "@/components/site-footer";
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/utils/supabase/client";
 import {
+  DEFAULT_TRAINING_VIDEO_URL,
+  TRAINING_CONTENT,
+} from "@/data/training-content";
+import {
   canonicalMachineName,
   getActualMachineNamesForTraining,
   getRepresentativeCertificateForTraining,
@@ -27,13 +31,6 @@ type TrainingMachine = {
   id: string;
   name: string;
   certificateMachineNames: string[];
-};
-
-type QuizQuestion = {
-  id: string;
-  question: string;
-  options: string[];
-  answer: string;
 };
 
 const FALLBACK_EQUIPMENT: TrainingMachine[] = [
@@ -74,41 +71,7 @@ const FALLBACK_EQUIPMENT: TrainingMachine[] = [
   },
 ];
 
-const QUIZ_QUESTIONS: QuizQuestion[] = [
-  {
-    id: "q1",
-    question: "What is the first thing you should check before operating a machine?",
-    options: ["Safety status and workspace readiness", "Maximum print speed", "Playlist volume"],
-    answer: "Safety status and workspace readiness",
-  },
-  {
-    id: "q2",
-    question: "When should you stop and ask staff for help?",
-    options: ["Only after finishing", "If something looks unsafe or unfamiliar", "Never"],
-    answer: "If something looks unsafe or unfamiliar",
-  },
-  {
-    id: "q3",
-    question: "How should PPE be handled during machine use?",
-    options: ["Optional if experienced", "Used as required for the process", "Only during setup"],
-    answer: "Used as required for the process",
-  },
-  {
-    id: "q4",
-    question: "What should you do after finishing a machine session?",
-    options: ["Leave immediately", "Clean up and follow shutdown steps", "Keep the machine running"],
-    answer: "Clean up and follow shutdown steps",
-  },
-  {
-    id: "q5",
-    question: "What is the minimum score needed to pass this training quiz?",
-    options: ["60%", "70%", "80%"],
-    answer: "80%",
-  },
-];
-
 const PASSING_SCORE = 80;
-const TEMP_VIDEO_URL = "https://www.pexels.com/download/video/7035591/";
 const TRAINING_MACHINES_TABLE = "training_machines";
 const supabase = createClient();
 
@@ -138,6 +101,25 @@ export function Training() {
     () => equipment.find((eq) => eq.name === activeEquipment) ?? null,
     [activeEquipment, equipment]
   );
+  const trainingContent = useMemo(
+    () => {
+      const trainingName = selectedMachine?.name ?? activeEquipment;
+      if (!trainingName) return null;
+
+      const directMatch = TRAINING_CONTENT[trainingName];
+      if (directMatch) return directMatch;
+
+      const normalizedName = canonicalMachineName(trainingName);
+      const fallbackMatch = Object.entries(TRAINING_CONTENT).find(
+        ([name]) => canonicalMachineName(name) === normalizedName
+      );
+
+      return fallbackMatch?.[1] ?? null;
+    },
+    [activeEquipment, selectedMachine]
+  );
+  const quizQuestions = trainingContent?.questions ?? [];
+  const trainingVideoUrl = trainingContent?.videoUrl ?? DEFAULT_TRAINING_VIDEO_URL;
 
   useEffect(() => {
     async function loadUser() {
@@ -282,25 +264,30 @@ export function Training() {
   };
 
   const handleQuizSubmit = () => {
+    if (quizQuestions.length === 0) {
+      setError("Training quiz content is not configured for this machine.");
+      return;
+    }
+
     if (!videoWatched) {
       setError("Watch the full training video before taking the quiz.");
       return;
     }
 
     const answeredCount = Object.keys(answers).length;
-    if (answeredCount < QUIZ_QUESTIONS.length) {
+    if (answeredCount < quizQuestions.length) {
       setError("Please answer all quiz questions before submitting.");
       return;
     }
 
     let correct = 0;
-    for (const question of QUIZ_QUESTIONS) {
+    for (const question of quizQuestions) {
       if (answers[question.id] === question.answer) {
         correct += 1;
       }
     }
 
-    const score = Math.round((correct / QUIZ_QUESTIONS.length) * 100);
+    const score = Math.round((correct / quizQuestions.length) * 100);
     setQuizScore(score);
     setQuizSubmitted(true);
     setError(null);
@@ -470,19 +457,19 @@ export function Training() {
                       Required Video + Quiz
                     </h2>
                     <p className="text-[15px] leading-relaxed text-[var(--text-secondary)]">
-                      Temporary training content is enabled right now. Watch the full video to unlock the quiz,
-                      then pass with at least {PASSING_SCORE}%.
+                      Watch the assigned training video, then pass the quiz with at least {PASSING_SCORE}% to
+                      unlock certification.
                     </p>
                   </div>
 
                   <div className="mt-6 rounded-2xl border border-[var(--border)] bg-[var(--background)] p-4">
-                    <p className="mb-3 text-sm font-semibold text-[var(--text-primary)]">1) Locked Training Video</p>
+                    <p className="mb-3 text-sm font-semibold text-[var(--text-primary)]">1) Training Video</p>
                     <video
                       controls
                       onEnded={() => setVideoWatched(true)}
                       className="h-auto w-full rounded-lg bg-black"
                     >
-                      <source src={TEMP_VIDEO_URL} type="video/mp4" />
+                      <source src={trainingVideoUrl} type="video/mp4" />
                       Your browser does not support the video tag.
                     </video>
                     <p className="mt-2 text-xs text-[var(--text-secondary)]">
@@ -499,7 +486,7 @@ export function Training() {
                     )}
 
                     <div className={`${!videoWatched ? "pointer-events-none opacity-50" : ""} space-y-4`}>
-                      {QUIZ_QUESTIONS.map((question) => (
+                      {quizQuestions.map((question) => (
                         <div key={question.id} className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">
                           <p className="text-sm font-medium text-[var(--text-primary)]">{question.question}</p>
                           <div className="mt-2 space-y-1">
