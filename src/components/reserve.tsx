@@ -6,10 +6,6 @@ import ReserveForm from "@/components/reserve-form";
 import { useEffect, useState } from "react";
 import { createClient as createBrowserClient } from "@/utils/supabase/client";
 import { formatInEastern } from "@/utils/time";
-import {
-  buildGoogleCalendarUrl,
-  buildOutlookCalendarUrl,
-} from "@/lib/calendar";
 
 type Equipment = {
   id: string;
@@ -54,7 +50,7 @@ export function Reserve({ equipment }: { equipment: Equipment[] }) {
         .from("reservations")
         .select('reservation_id, machine, start, "end", duration')
         .eq("user_id", user.id)
-        .gte("end", new Date().toISOString())
+        .gte("start", new Date().toISOString())
         .order("start", { ascending: true });
 
       if (error) {
@@ -170,102 +166,38 @@ export function Reserve({ equipment }: { equipment: Equipment[] }) {
                   </p>
                 ) : (
                   <ul className="space-y-3">
-                    {reservations.map((r) => {
-                      const start = new Date(r.start);
-                      const end = new Date(r.end);
-                      const now = new Date();
-                      const isActive = now >= start && now <= end;
-
-                      const title = `${r.machine} Reservation`;
-                      const description = `Equipment reservation for ${r.machine}.`;
-                      const location = "Makerspace";
-
-                      const googleUrl = buildGoogleCalendarUrl({
-                        title,
-                        description,
-                        location,
-                        start,
-                        end,
-                      });
-
-                      const outlookUrl = buildOutlookCalendarUrl({
-                        title,
-                        description,
-                        location,
-                        start,
-                        end,
-                      });
-
-                      const appleUrl = `/api/calendar/ics/${r.reservation_id}`;
-
-                      return (
-                        <li
-                          key={r.reservation_id}
-                          className={`flex items-center justify-between rounded-md border px-4 py-2 text-sm ${
-                            isActive ? "border-green-300 bg-green-50" : ""
-                          }`}
-                        >
-                          <div>
-                            <div className="font-medium">{r.machine}</div>
-                            <div className="text-xs text-gray-500">
-                              {formatInEastern(new Date(r.start), {
-                                weekday: "short",
-                                month: "short",
-                                day: "numeric",
-                                hour: "numeric",
-                                minute: "2-digit",
-                              })}{" "}
-                              –{" "}
-                              {formatInEastern(new Date(r.end), {
-                                hour: "numeric",
-                                minute: "2-digit",
-                              })}{" "}
-                              ({r.duration ?? "?"} min)
-                              {isActive && (
-                                <div className="mt-1 text-xs font-semibold text-green-700">
-                                  In Progress
-                                </div>
-                              )}
-                            </div>
-
-                            <div className="mt-2 flex flex-wrap gap-2">
-                              <a
-                                href={googleUrl}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="rounded-md border px-2 py-1 text-xs font-medium hover:bg-gray-50"
-                              >
-                                Google
-                              </a>
-
-                              <a
-                                href={outlookUrl}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="rounded-md border px-2 py-1 text-xs font-medium hover:bg-gray-50"
-                              >
-                                Outlook
-                              </a>
-
-                              <a
-                                href={appleUrl}
-                                className="rounded-md border px-2 py-1 text-xs font-medium hover:bg-gray-50"
-                              >
-                                Apple / ICS
-                              </a>
-                            </div>
+                    {reservations.map((r) => (
+                      <li
+                        key={r.reservation_id}
+                        className="flex items-center justify-between rounded-md border px-4 py-2 text-sm"
+                      >
+                        <div>
+                          <div className="font-medium">{r.machine}</div>
+                          <div className="text-xs text-gray-500">
+                            {formatInEastern(new Date(r.start), {
+                              weekday: "short",
+                              month: "short",
+                              day: "numeric",
+                              hour: "numeric",
+                              minute: "2-digit",
+                            })}{" "}
+                            –{" "}
+                            {formatInEastern(new Date(r.end), {
+                              hour: "numeric",
+                              minute: "2-digit",
+                            })}{" "}
+                            ({r.duration ?? "?"} min)
                           </div>
-
-                          <button
-                            type="button"
-                            onClick={() => handleCancel(r.reservation_id)}
-                            className="text-xs font-semibold text-red-600 hover:underline"
-                          >
-                            Cancel
-                          </button>
-                        </li>
-                      );
-                    })}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleCancel(r.reservation_id)}
+                          className="text-xs font-semibold text-red-600 hover:underline"
+                        >
+                          Cancel
+                        </button>
+                      </li>
+                    ))}
                   </ul>
                 )}
               </div>
