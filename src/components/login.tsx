@@ -11,7 +11,7 @@ const inputStyles =
 
 const labelStyles = "text-sm font-medium text-[var(--text-primary)]";
 
-export function LoginPage() {
+export function LoginPage({ suspended = false }: { suspended?: boolean }) {
   const [loginData, setLoginData] = useState({ email: "", password: "", remember: false });
   const [signupData, setSignupData] = useState({
     first_name: "",
@@ -40,6 +40,12 @@ export function LoginPage() {
     }
   }, []);
 
+  useEffect(() => {
+    if (suspended) {
+      setLoginError("Your account has been suspended. Contact an admin for assistance.");
+    }
+  }, [suspended]);
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginLoading(true);
@@ -59,9 +65,16 @@ export function LoginPage() {
         if (userId) {
           const { data: profile } = await supabase
             .from("profiles")
-            .select("role")
+            .select("role, status")
             .eq("id", userId)
             .single();
+
+          if (profile?.status === "suspended") {
+            await supabase.auth.signOut();
+            setLoginError("Your account has been suspended. Contact an admin for assistance.");
+            return;
+          }
+
           if (profile?.role === "kiosk") {
             router.push("/admin/kiosk");
             return;

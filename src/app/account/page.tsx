@@ -24,7 +24,7 @@ type TrainingCertificate = {
 export default async function AccountPage({
   searchParams,
 }: {
-  searchParams?: { [key: string]: string | string[] | undefined } | Promise<{ [key: string]: string | string[] | undefined }>;
+  searchParams?: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
   const supabase = await createClient();
   const {
@@ -97,7 +97,7 @@ export default async function AccountPage({
       score: cert.score,
     })) ?? [];
 
-  const resolvedParams = searchParams instanceof Promise ? await searchParams : searchParams;
+  const resolvedParams = searchParams ? await searchParams : undefined;
   const showCancel = resolvedParams?.cancel === "1";
   const showChange = resolvedParams?.change === "1";
 

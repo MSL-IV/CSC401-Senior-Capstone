@@ -2,6 +2,10 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
 export async function updateSession(request: NextRequest) {
+  const loginUrl = request.nextUrl.clone()
+  loginUrl.pathname = '/auth'
+  loginUrl.searchParams.set('suspended', '1')
+
   let supabaseResponse = NextResponse.next({
     request,
   })
@@ -15,7 +19,7 @@ export async function updateSession(request: NextRequest) {
           return request.cookies.getAll()
         },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) => request.cookies.set(name, value))
+          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
           supabaseResponse = NextResponse.next({
             request,
           })
@@ -42,6 +46,24 @@ export async function updateSession(request: NextRequest) {
 
   // Update last_active for signed-in users
   if (currentUser) {
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('status')
+      .eq('id', currentUser.id)
+      .single()
+
+    if (profileError) {
+      console.error('Failed to load profile status:', profileError.message)
+    } else if (profile?.status === 'suspended') {
+      await supabase.auth.signOut()
+
+      if (request.nextUrl.pathname !== '/auth') {
+        return NextResponse.redirect(loginUrl)
+      }
+
+      return supabaseResponse
+    }
+
     const { error: updateError } = await supabase
       .from('profiles')
       .update({ last_active: new Date().toISOString() })
