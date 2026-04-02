@@ -4,6 +4,14 @@ import { Navbar } from "@/components/navbar";
 import { SiteFooter } from "@/components/site-footer";
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/utils/supabase/client";
+import {
+  canonicalMachineName,
+  getActualMachineNamesForTraining,
+  getRepresentativeCertificateForTraining,
+  getTrainingCleanupMachineNames,
+  hasTrainingCertificate,
+  type NamedMachine,
+} from "@/utils/training-machines";
 
 type TrainingCertificate = {
   id: string;
@@ -18,7 +26,7 @@ type TrainingCertificate = {
 type TrainingMachine = {
   id: string;
   name: string;
-  certificateMachineName: string;
+  certificateMachineNames: string[];
 };
 
 type QuizQuestion = {
@@ -28,23 +36,42 @@ type QuizQuestion = {
   answer: string;
 };
 
-function canonicalMachineName(name: string): string {
-  return name
-    .trim()
-    .replace(/\s*\(\d+\)\s*$/i, "")
-    .replace(/\s*[-_#]?\s*\d+\s*$/i, "")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
 const FALLBACK_EQUIPMENT: TrainingMachine[] = [
-  { id: "laser-cutter", name: "Laser Cutter", certificateMachineName: "Laser Cutter" },
-  { id: "milling-machine", name: "Milling Machine", certificateMachineName: "Milling Machine" },
-  { id: "3d-printer", name: "3D Printer", certificateMachineName: "3D Printer" },
-  { id: "ultimaker", name: "UltiMaker", certificateMachineName: "UltiMaker" },
-  { id: "heat-press", name: "Heat Press", certificateMachineName: "Heat Press" },
-  { id: "vinyl-cutter", name: "Vinyl Cutter", certificateMachineName: "Vinyl Cutter" },
-  { id: "soldering-station", name: "Soldering Station", certificateMachineName: "Soldering Station" },
+  {
+    id: "laser-cutter",
+    name: "Laser Cutter",
+    certificateMachineNames: getActualMachineNamesForTraining("Laser Cutter"),
+  },
+  {
+    id: "milling-machine",
+    name: "Milling Machine",
+    certificateMachineNames: getActualMachineNamesForTraining("Milling Machine"),
+  },
+  {
+    id: "3d-printer",
+    name: "3D Printer",
+    certificateMachineNames: getActualMachineNamesForTraining("3D Printer"),
+  },
+  {
+    id: "ultimaker",
+    name: "UltiMaker",
+    certificateMachineNames: getActualMachineNamesForTraining("UltiMaker"),
+  },
+  {
+    id: "heat-press",
+    name: "Heat Press",
+    certificateMachineNames: getActualMachineNamesForTraining("Heat Press"),
+  },
+  {
+    id: "vinyl-cutter",
+    name: "Vinyl Cutter",
+    certificateMachineNames: getActualMachineNamesForTraining("Vinyl Cutter"),
+  },
+  {
+    id: "soldering-station",
+    name: "Soldering Station",
+    certificateMachineNames: getActualMachineNamesForTraining("Soldering Station"),
+  },
 ];
 
 const QUIZ_QUESTIONS: QuizQuestion[] = [
@@ -82,6 +109,7 @@ const QUIZ_QUESTIONS: QuizQuestion[] = [
 
 const PASSING_SCORE = 80;
 const TEMP_VIDEO_URL = "https://www.pexels.com/download/video/7035591/";
+const TRAINING_MACHINES_TABLE = "training_machines";
 const supabase = createClient();
 
 export function Training() {
@@ -130,10 +158,14 @@ export function Training() {
     async function loadEquipment() {
       setLoadingEquipment(true);
 
-      const { data, error: equipmentError } = await supabase
-        .from("machines")
-        .select("id, name")
-        .order("name", { ascending: true });
+      const [{ data, error: equipmentError }, { data: machineData, error: machineError }] =
+        await Promise.all([
+          supabase
+            .from(TRAINING_MACHINES_TABLE)
+            .select("id, name")
+            .order("name", { ascending: true }),
+          supabase.from("machines").select("name").order("name", { ascending: true }),
+        ]);
 
       if (equipmentError) {
         console.error("Failed to load machines:", equipmentError.message);
@@ -142,11 +174,23 @@ export function Training() {
         return;
       }
 
+      if (machineError) {
+        console.error("Failed to load reservation machines:", machineError.message);
+      }
+
       if (!data || data.length === 0) {
         setEquipment(FALLBACK_EQUIPMENT);
         setLoadingEquipment(false);
         return;
       }
+
+      const reservableMachines: NamedMachine[] =
+        (machineData ?? [])
+          .map((machine) => {
+            const rawName = typeof machine.name === "string" ? machine.name.trim() : "";
+            return rawName ? { name: rawName } : null;
+          })
+          .filter((machine): machine is NamedMachine => Boolean(machine)) ?? [];
 
       const dedupedByName = new Map<string, TrainingMachine>();
 
@@ -155,12 +199,14 @@ export function Training() {
         if (!rawName) continue;
 
         const canonical = canonicalMachineName(rawName);
-        const normalized = canonical.toLowerCase();
-        if (!dedupedByName.has(normalized)) {
-          dedupedByName.set(normalized, {
+        if (!dedupedByName.has(canonical)) {
+          dedupedByName.set(canonical, {
             id: String(machine.id),
-            name: canonical,
-            certificateMachineName: rawName,
+            name: rawName,
+            certificateMachineNames: getActualMachineNamesForTraining(
+              rawName,
+              reservableMachines,
+            ),
           });
         }
       }
@@ -202,24 +248,25 @@ export function Training() {
         setError("Couldn't fetch training certificate. Please try again.");
       } else {
         const certs = (data as TrainingCertificate[] | null) ?? [];
-        const matching = certs.filter(
-          (c) => canonicalMachineName(c.machine_name ?? "") === activeEquipment
+        const cert = getRepresentativeCertificateForTraining(
+          activeEquipment,
+          certs,
+          selectedMachine?.certificateMachineNames.map((name) => ({ name })) ?? [],
         );
-        matching.sort((a, b) => {
-          const aTime = a.completed_at ? new Date(a.completed_at).getTime() : 0;
-          const bTime = b.completed_at ? new Date(b.completed_at).getTime() : 0;
-          return bTime - aTime;
-        });
-        const cert = matching[0] ?? null;
-        setCertificate(cert);
-        setCertificateUnlocked(Boolean(cert?.completed_at ?? cert?.id));
+        setCertificate((cert as TrainingCertificate | null) ?? null);
+        setCertificateUnlocked(
+          hasTrainingCertificate(activeEquipment, certs, {
+            machines:
+              selectedMachine?.certificateMachineNames.map((name) => ({ name })) ?? [],
+          }),
+        );
       }
 
       setLoadingCert(false);
     }
 
     fetchCertificate();
-  }, [userId, activeEquipment]);
+  }, [userId, activeEquipment, selectedMachine]);
 
   const handleSearch = () => {
     if (!selectedEquipment) {
@@ -289,60 +336,59 @@ export function Training() {
     expiry.setMonth(expiry.getMonth() + 12);
     const expiresAt = expiry.toISOString();
 
-    const newId =
-      typeof crypto !== "undefined" && crypto.randomUUID
-        ? crypto.randomUUID()
-        : `${Date.now()}`;
+    const trainingCertificateName = selectedMachine?.name ?? activeEquipment;
+    const certificateMachineNames =
+      selectedMachine?.certificateMachineNames.length
+        ? selectedMachine.certificateMachineNames
+        : getActualMachineNamesForTraining(trainingCertificateName);
+    const cleanupMachineNames = getTrainingCleanupMachineNames(activeEquipment, [
+      ...certificateMachineNames.map((name) => ({ name })),
+    ]);
 
-    const machineNameForCertificate =
-      selectedMachine?.certificateMachineName ?? activeEquipment;
-
-    const { data: updated, error: updateError } = await supabase
+    const { error: deleteError } = await supabase
       .from("training_certificates")
-      .update({
+      .delete()
+      .eq("user_id", userId)
+      .in("machine_name", cleanupMachineNames);
+
+    if (deleteError) {
+      console.error("Training certificate cleanup error:", deleteError);
+      setError(`Unable to save certificate. ${deleteError.message ?? "Please try again."}`);
+      setLoadingCert(false);
+      return;
+    }
+
+    const { data: inserted, error: insertError } = await supabase
+      .from("training_certificates")
+      .insert({
+        id:
+          typeof crypto !== "undefined" && crypto.randomUUID
+            ? crypto.randomUUID()
+            : `${Date.now()}`,
+        user_id: userId,
+        machine_name: trainingCertificateName,
         completed_at: now,
         expires_at: expiresAt,
         issued_by: issuedByValue,
         score: quizScore,
       })
-      .eq("user_id", userId)
-      .eq("machine_name", machineNameForCertificate)
       .select();
 
-    let savedCert: TrainingCertificate | null = null;
-
-    if (updateError) {
-      console.error("Training certificate update error:", updateError);
+    if (insertError) {
+      console.error("Training certificate insert error:", insertError);
+      setError(`Unable to save certificate. ${insertError.message ?? "Please try again."}`);
+      setLoadingCert(false);
+      return;
     }
 
-    if (updated && updated.length > 0) {
-      savedCert = updated[0] as TrainingCertificate;
-    } else {
-      const { data: inserted, error: insertError } = await supabase
-        .from("training_certificates")
-        .insert({
-          id: newId,
-          user_id: userId,
-          machine_name: machineNameForCertificate,
-          completed_at: now,
-          expires_at: expiresAt,
-          issued_by: issuedByValue,
-          score: quizScore,
-        })
-        .select()
-        .single();
+    const savedCert =
+      getRepresentativeCertificateForTraining(
+        activeEquipment,
+        (inserted as TrainingCertificate[] | null) ?? [],
+        certificateMachineNames.map((name) => ({ name })),
+      ) ?? null;
 
-      if (insertError) {
-        console.error("Training certificate insert error:", insertError);
-        setError(`Unable to save certificate. ${insertError.message ?? "Please try again."}`);
-        setLoadingCert(false);
-        return;
-      }
-
-      savedCert = inserted as TrainingCertificate;
-    }
-
-    setCertificate(savedCert);
+    setCertificate((savedCert as TrainingCertificate | null) ?? null);
     setCertificateUnlocked(true);
     setLoadingCert(false);
   };

@@ -7,6 +7,7 @@ import {
   formatInEastern,
   zonedDateToUtc,
 } from "@/utils/time";
+import { hasMachineCertificate } from "@/utils/training-machines";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 type Equip = {
   id: string;
@@ -23,15 +24,6 @@ type ReservationItem = {
   date: string;
   time: string;
 };
-function canonicalMachineName(name: string): string {
-  return name
-    .trim()
-    .replace(/\s*\(\d+\)\s*$/i, "")
-    .replace(/\s*[-_#]?\s*\d+\s*$/i, "")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
 export default function ReserveForm({
   equipment = [],
   onReservationCreated,
@@ -239,8 +231,6 @@ export default function ReserveForm({
       return false;
     }
 
-    const canonicalName = canonicalMachineName(machineName);
-
     const { data, error } = await supabase
       .from("training_certificates")
       .select("expires_at, machine_name")
@@ -255,12 +245,7 @@ export default function ReserveForm({
       return false;
     }
 
-    const hasValidCert = (data ?? []).some((cert) => {
-      const certCanonical = canonicalMachineName(cert.machine_name ?? "");
-      if (certCanonical !== canonicalName) return false;
-      if (!cert.expires_at) return true;
-      return new Date(cert.expires_at) >= new Date();
-    });
+    const hasValidCert = hasMachineCertificate(machineName, data ?? []);
 
     if (reqId !== trainingReqId.current) return false;
 
