@@ -680,7 +680,7 @@ export function ViewUsersPage() {
         >
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex flex-1 flex-col gap-3 md:flex-row md:items-center">
-              <div className="relative w-full md:w-[20rem] lg:w-[23rem] md:flex-none">
+              <div className="relative w-full md:w-64 lg:w-72 md:flex-none">
                 <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-[var(--text-secondary)]">
                   <svg
                     viewBox="0 0 24 24"
