@@ -680,7 +680,7 @@ export function ViewUsersPage() {
         >
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex flex-1 flex-col gap-3 md:flex-row md:items-center">
-              <div className="relative flex-1">
+              <div className="relative w-full md:w-[20rem] lg:w-[23rem] md:flex-none">
                 <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-[var(--text-secondary)]">
                   <svg
                     viewBox="0 0 24 24"
@@ -698,11 +698,16 @@ export function ViewUsersPage() {
                   </svg>
                 </span>
                 <input
-                  type="search"
+                  type="text"
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
                   placeholder="Search by name or email"
-                  className="w-full rounded-2xl border border-[var(--border)] bg-[var(--surface-muted)] px-11 py-3 text-sm text-[var(--text-primary)] outline-none transition focus:border-[var(--secondary)] focus:bg-white"
+                  aria-label="Search users by name or email"
+                  className="w-full rounded-2xl border border-[var(--border)] bg-[var(--surface-muted)] px-11 py-3 text-sm text-[var(--text-primary)] caret-[var(--text-primary)] outline-none transition placeholder:text-[var(--text-secondary)] focus:border-[var(--secondary)] focus:bg-[var(--surface)]"
+                  style={{
+                    color: "var(--text-primary)",
+                    WebkitTextFillColor: "var(--text-primary)",
+                  }}
                 />
               </div>
               <div className="flex flex-wrap gap-2">

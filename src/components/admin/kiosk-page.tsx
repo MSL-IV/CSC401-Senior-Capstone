@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/utils/supabase/client";
 import { NAME_COLUMN, normalizeTag, rowsToTagMap, TAG_COLUMN, TAG_LOOKUP_TABLE } from "@/utils/rfid";
@@ -93,9 +94,27 @@ export function KioskPage() {
     setSubmitting(true);
     setSubmitMessage(null);
 
-    const checkoutEmail = email.trim();
+    const checkoutEmail = email.trim().toLowerCase();
 
     try {
+      const { data: matchedUsers, error: accountError } = await supabase
+        .from("profiles")
+        .select("id")
+        .ilike("email", checkoutEmail)
+        .limit(1);
+
+      if (accountError) {
+        setSubmitMessage(`Unable to verify account: ${accountError.message}`);
+        return;
+      }
+
+      if (!matchedUsers || matchedUsers.length === 0) {
+        setSubmitMessage(
+          "No account found for that email. Please create an account before checking out equipment.",
+        );
+        return;
+      }
+
       // Look up friendly name for display while keeping the raw tag for storage/uniqueness
       const { data: tagRow, error: lookupError } = await supabase
         .from(TAG_LOOKUP_TABLE)
@@ -139,7 +158,7 @@ export function KioskPage() {
       const existing = (existingRows?.[0] ?? null) as CheckoutRecord | null;
 
       if (existing) {
-        if (existing.user_email !== checkoutEmail) {
+        if (existing.user_email.toLowerCase() !== checkoutEmail) {
           setSubmitMessage(`Tag is already checked out by ${existing.user_email}.`);
           return;
         }
@@ -394,6 +413,13 @@ export function KioskPage() {
           {!emailIsValid && emailTouched && (
             <p className="mt-2 text-sm text-red-600">A valid email is required before scanning items.</p>
           )}
+
+          <Link
+            href="/auth"
+            className="mt-4 inline-flex rounded-full border border-[var(--border)] px-4 py-2 text-sm font-semibold text-[var(--text-secondary)] transition hover:border-[var(--primary)] hover:text-[var(--text-primary)]"
+          >
+            Don&apos;t have an account?
+          </Link>
 
           <div className="mt-6 space-y-3 text-sm text-[var(--text-secondary)]">
             <div className="flex items-start gap-2">
