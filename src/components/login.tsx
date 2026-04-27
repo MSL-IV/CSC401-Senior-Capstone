@@ -75,6 +75,11 @@ export function LoginPage({ suspended = false }: { suspended?: boolean }) {
             return;
           }
 
+          await supabase
+            .from("profiles")
+            .update({ last_active: new Date().toISOString() })
+            .eq("id", userId);
+
           if (profile?.role === "kiosk") {
             router.push("/admin/kiosk");
             return;
@@ -100,6 +105,15 @@ export function LoginPage({ suspended = false }: { suspended?: boolean }) {
 
     const trimmedEmail = signupData.email.trim();
     const trimmedStudentId = signupData.student_id.trim();
+
+    // Validate email domain
+    const emailDomain = trimmedEmail.split('@')[1]?.toLowerCase();
+    const ALLOWED_DOMAINS = ['spartans.ut.edu', 'ut.edu'];
+    if (!emailDomain || !ALLOWED_DOMAINS.includes(emailDomain)) {
+      setSignupError("Only @spartans.ut.edu and @ut.edu email addresses are allowed.");
+      setSignupLoading(false);
+      return;
+    }
 
     // Validate passwords match
     if (signupData.password !== signupData.confirmPassword) {

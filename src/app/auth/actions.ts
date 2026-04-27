@@ -44,14 +44,19 @@ export async function login(formData: FormData) {
   redirect('/account')
 }
 
+const ALLOWED_SIGNUP_DOMAINS = ['spartans.ut.edu', 'ut.edu']
+
 export async function signup(formData: FormData) {
   const supabase = await createClient()
 
-  // type-casting here for convenience
-  // in practice, you should validate your inputs
   const data = {
     email: formData.get('email') as string,
     password: formData.get('password') as string,
+  }
+
+  const domain = data.email?.split('@')[1]?.toLowerCase()
+  if (!domain || !ALLOWED_SIGNUP_DOMAINS.includes(domain)) {
+    redirect('/error')
   }
 
   const { error } = await supabase.auth.signUp(data)
