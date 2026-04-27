@@ -331,7 +331,7 @@ export function ViewUsersPage() {
   };
 
   const filteredUsers = useMemo(() => {
-    return users.filter((user: UserRecord) => {
+    const filtered = users.filter((user: UserRecord) => {
       const matchesSearch =
         user.name.toLowerCase().includes(search.toLowerCase()) ||
         user.email.toLowerCase().includes(search.toLowerCase());
@@ -342,6 +342,23 @@ export function ViewUsersPage() {
 
       return matchesSearch && matchesStatus && matchesRole;
     });
+    const sorted = [...filtered].sort((a, b) => {
+      let timeA, timeB;
+      if (a.lastLogin == "Never"){
+        timeA = 0;
+      }
+      else{
+        timeA = new Date(a.lastLogin).getTime();
+      }
+      if (b.lastLogin == "Never"){
+        timeB = 0;
+      }
+      else{
+        timeB = new Date(b.lastLogin).getTime();
+      }
+      return timeB - timeA;
+    });
+    return sorted;
   }, [search, statusFilter, roleFilter, users]);
 
   const stats = useMemo(() => {
