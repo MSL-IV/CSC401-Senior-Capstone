@@ -465,6 +465,7 @@ export function ViewUsersPage() {
 
   const handleRevokeCertificate = async (userId: string, machineName: string) => {
     setCertActionLoading(machineName);
+    setError(null);
     try {
       const cleanupMachineNames = getTrainingCleanupMachineNames(
         machineName,
@@ -478,6 +479,21 @@ export function ViewUsersPage() {
 
       if (error) {
         setError('Failed to revoke certificate: ' + error.message);
+        return;
+      }
+
+      const { error: reservationDeleteError } = await supabase
+        .from('reservations')
+        .delete()
+        .eq('user_id', userId)
+        .in('machine', cleanupMachineNames)
+        .gte('end', new Date().toISOString());
+
+      if (reservationDeleteError) {
+        setError(
+          'Certificate revoked, but active reservations could not be cancelled: ' +
+            reservationDeleteError.message,
+        );
         return;
       }
 
@@ -678,66 +694,62 @@ export function ViewUsersPage() {
             boxShadow: "var(--shadow-soft)",
           }}
         >
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex flex-1 flex-col gap-3 md:flex-row md:items-center">
-              <div className="relative w-full md:w-64 lg:w-72 md:flex-none">
-                <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-[var(--text-secondary)]">
-                  <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="h-5 w-5"
-                  >
-                    <path
-                      d="m21 21-4.35-4.35M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14Z"
-                      stroke="currentColor"
-                      strokeWidth={1.6}
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                </span>
-                <input
-                  type="text"
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Search by name or email"
-                  aria-label="Search users by name or email"
-                  className="w-full rounded-2xl border border-[var(--border)] bg-[var(--surface-muted)] px-11 py-3 text-sm text-[var(--text-primary)] caret-[var(--text-primary)] outline-none transition placeholder:text-[var(--text-secondary)] focus:border-[var(--secondary)] focus:bg-[var(--surface)]"
-                  style={{
-                    color: "var(--text-primary)",
-                    WebkitTextFillColor: "var(--text-primary)",
-                  }}
-                />
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {(["all", "active", "pending", "suspended"] as const).map(
-                  (status) => (
-                    <button
-                      key={status}
-                      type="button"
-                      onClick={() => setStatusFilter(status)}
-                      className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-wide transition ${
-                        statusFilter === status
-                          ? "border-[var(--secondary)] bg-[var(--secondary)] text-white"
-                          : "border-[var(--border)] text-[var(--text-secondary)] hover:border-[var(--secondary-accent)] hover:text-[var(--text-primary)]"
-                      }`}
-                    >
-                      {status === "all"
-                        ? "All Statuses"
-                        : statusStyles[status].label}
-                    </button>
-                  ),
-                )}
-              </div>
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+            <div className="relative w-full lg:w-80 lg:flex-none">
+              <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-[var(--text-secondary)]">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-5 w-5"
+                >
+                  <path
+                    d="m21 21-4.35-4.35M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14Z"
+                    stroke="currentColor"
+                    strokeWidth={1.6}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </span>
+              <input
+                type="text"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Search by name or email"
+                aria-label="Search users by name or email"
+                className="w-full rounded-2xl border border-[var(--border)] bg-[var(--surface-muted)] px-11 py-3 text-sm text-[var(--text-primary)] caret-[var(--text-primary)] outline-none transition placeholder:text-[var(--text-secondary)] focus:border-[var(--secondary)] focus:bg-[var(--surface)]"
+                style={{
+                  color: "var(--text-primary)",
+                  WebkitTextFillColor: "var(--text-primary)",
+                }}
+              />
             </div>
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+              {(["all", "active", "pending", "suspended"] as const).map(
+                (status) => (
+                  <button
+                    key={status}
+                    type="button"
+                    onClick={() => setStatusFilter(status)}
+                    className={`whitespace-nowrap rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-wide transition ${
+                      statusFilter === status
+                        ? "border-[var(--secondary)] bg-[var(--secondary)] text-white"
+                        : "border-[var(--border)] text-[var(--text-secondary)] hover:border-[var(--secondary-accent)] hover:text-[var(--text-primary)]"
+                    }`}
+                  >
+                    {status === "all"
+                      ? "All Statuses"
+                      : statusStyles[status].label}
+                  </button>
+                ),
+              )}
               {(["all", "student", "faculty", "admin", "kiosk"] as const).map((role) => (
                 <button
                   key={role}
                   type="button"
                   onClick={() => setRoleFilter(role)}
-                  className={`rounded-[var(--radius-button)] px-3 py-2 text-xs font-semibold uppercase tracking-wide transition ${
+                  className={`whitespace-nowrap rounded-[var(--radius-button)] px-3 py-2 text-xs font-semibold uppercase tracking-wide transition ${
                     roleFilter === role
                       ? "bg-[var(--primary)] text-white"
                       : "border border-[var(--border)] text-[var(--text-secondary)] hover:border-[var(--primary)] hover:text-[var(--text-primary)]"
@@ -835,33 +847,41 @@ export function ViewUsersPage() {
 
       {/* Management Modal */}
       {managingUserId && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+          <div className="max-h-[92vh] w-full max-w-md overflow-y-auto rounded-lg border border-[var(--border)] bg-[var(--surface)] p-6 text-[var(--text-primary)] shadow-xl mx-4">
             {(() => {
               const user = users.find(u => u.id === managingUserId);
               if (!user) return null;
 
               return (
                 <>
-                  <h3 className="text-lg font-semibold mb-4">
-                    Manage {user.name}
-                  </h3>
+                  <div className="mb-4 flex items-center justify-between gap-4">
+                    <h3 className="text-lg font-semibold text-[var(--text-primary)]">
+                      Manage {user.name}
+                    </h3>
+                    <button
+                      onClick={() => setManagingUserId(null)}
+                      className="shrink-0 px-4 py-2 text-sm border border-[var(--border)] text-[var(--text-primary)] rounded hover:bg-[var(--surface-muted)]"
+                    >
+                      Back
+                    </button>
+                  </div>
                   <div className="space-y-4">
                     {canModifyUserRoles(currentUserRole) && (
                       <div>
-                        <p className="text-sm text-gray-600 mb-2">Status</p>
+                        <p className="text-sm text-[var(--text-secondary)] mb-2">Status</p>
                         <div className="flex gap-2">
                           <button
                             onClick={() => handleActivateUser(user.id)}
                             disabled={updateLoading === user.id}
-                            className="px-3 py-2 text-sm bg-emerald-100 text-emerald-700 rounded hover:bg-emerald-200 disabled:opacity-50"
+                            className="px-3 py-2 text-sm bg-emerald-500/15 text-emerald-500 rounded hover:bg-emerald-500/25 disabled:opacity-50"
                           >
                             Activate
                           </button>
                           <button
                             onClick={() => handleSuspendUser(user.id)}
                             disabled={updateLoading === user.id}
-                            className="px-3 py-2 text-sm bg-red-100 text-red-700 rounded hover:bg-red-200 disabled:opacity-50"
+                            className="px-3 py-2 text-sm bg-red-500/15 text-red-500 rounded hover:bg-red-500/25 disabled:opacity-50"
                           >
                             Suspend
                           </button>
@@ -871,33 +891,33 @@ export function ViewUsersPage() {
                     
                     {canModifyUserRoles(currentUserRole) && (
                       <div>
-                        <p className="text-sm text-gray-600 mb-2">Role</p>
+                        <p className="text-sm text-[var(--text-secondary)] mb-2">Role</p>
                         <div className="flex gap-2">
                           <button
                             onClick={() => handleChangeRole(user.id, 'student')}
                             disabled={updateLoading === user.id}
-                            className="px-3 py-2 text-sm bg-blue-100 text-blue-700 rounded hover:bg-blue-200 disabled:opacity-50"
+                            className="px-3 py-2 text-sm bg-blue-500/15 text-blue-500 rounded hover:bg-blue-500/25 disabled:opacity-50"
                           >
                             Student
                           </button>
                           <button
                             onClick={() => handleChangeRole(user.id, 'faculty')}
                             disabled={updateLoading === user.id}
-                            className="px-3 py-2 text-sm bg-purple-100 text-purple-700 rounded hover:bg-purple-200 disabled:opacity-50"
+                            className="px-3 py-2 text-sm bg-purple-500/15 text-purple-500 rounded hover:bg-purple-500/25 disabled:opacity-50"
                           >
                             Faculty
                           </button>
                           <button
                             onClick={() => handleChangeRole(user.id, 'admin')}
                             disabled={updateLoading === user.id}
-                            className="px-3 py-2 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200 disabled:opacity-50"
+                            className="px-3 py-2 text-sm bg-[var(--surface-muted)] text-[var(--text-primary)] rounded hover:bg-[var(--border)] disabled:opacity-50"
                           >
                             Admin
                           </button>
                           <button
                             onClick={() => handleChangeRole(user.id, 'kiosk')}
                             disabled={updateLoading === user.id}
-                            className="px-3 py-2 text-sm bg-amber-100 text-amber-700 rounded hover:bg-amber-200 disabled:opacity-50"
+                            className="px-3 py-2 text-sm bg-amber-500/15 text-amber-500 rounded hover:bg-amber-500/25 disabled:opacity-50"
                           >
                             Kiosk
                           </button>
@@ -907,11 +927,11 @@ export function ViewUsersPage() {
 
                     {canModifyUserRoles(currentUserRole) && (
                       <div>
-                        <p className="text-sm text-gray-600 mb-2">Danger Zone</p>
+                        <p className="text-sm text-[var(--text-secondary)] mb-2">Danger Zone</p>
                         <button
                           onClick={() => handleDeleteUser(user)}
                           disabled={deleteLoading === user.id || user.id === currentUserId}
-                          className="w-full px-3 py-2 text-sm bg-red-100 text-red-700 rounded hover:bg-red-200 disabled:opacity-50"
+                          className="w-full px-3 py-2 text-sm bg-red-500/15 text-red-500 rounded hover:bg-red-500/25 disabled:opacity-50"
                         >
                           {deleteLoading === user.id
                             ? "Removing User..."
@@ -919,7 +939,7 @@ export function ViewUsersPage() {
                               ? "You Cannot Remove Yourself"
                               : "Remove User"}
                         </button>
-                        <p className="mt-2 text-xs text-gray-500">
+                        <p className="mt-2 text-xs text-[var(--text-secondary)]">
                           This permanently deletes the user&apos;s account, profile, reservations, and training certificates.
                         </p>
                       </div>
@@ -927,21 +947,21 @@ export function ViewUsersPage() {
 
                     {isFacultyOrAdmin(currentUserRole) && (
                       <div>
-                        <p className="text-sm text-gray-600 mb-2">Training Certificates</p>
-                        <div className="text-xs text-gray-500 mb-2">
+                        <p className="text-sm text-[var(--text-secondary)] mb-2">Training Certificates</p>
+                        <div className="text-xs text-[var(--text-secondary)] mb-2">
                           {certCounts[user.id]?.count || 0} of {allMachines.length} certificates
                         </div>
 
                         {/* Per-machine certificate list */}
-                        <div className="max-h-48 overflow-y-auto space-y-1 mb-3 border border-gray-200 rounded p-2">
+                        <div className="max-h-48 overflow-y-auto space-y-1 mb-3 border border-[var(--border)] bg-[var(--surface-muted)] rounded p-2">
                           {allMachines.map((machine) => {
                             const hasCert = certCounts[user.id]?.machines.includes(machine.name);
                             const isLoading = certActionLoading === machine.name;
                             return (
-                              <div key={machine.id} className="flex items-center justify-between py-1 px-1 rounded hover:bg-gray-50">
+                              <div key={machine.id} className="flex items-center justify-between py-1 px-1 rounded hover:bg-[var(--surface)]">
                                 <div className="flex items-center gap-2">
                                   <span className={`h-2 w-2 rounded-full ${hasCert ? 'bg-emerald-500' : 'bg-gray-300'}`} />
-                                  <span className="text-sm text-gray-700">{machine.name}</span>
+                                  <span className="text-sm text-[var(--text-primary)]">{machine.name}</span>
                                 </div>
                                 <button
                                   onClick={() =>
@@ -952,8 +972,8 @@ export function ViewUsersPage() {
                                   disabled={isLoading || updateLoading === user.id}
                                   className={`px-2 py-1 text-xs rounded font-semibold transition disabled:opacity-50 ${
                                     hasCert
-                                      ? 'bg-red-100 text-red-700 hover:bg-red-200'
-                                      : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
+                                      ? 'bg-red-500/15 text-red-500 hover:bg-red-500/25'
+                                      : 'bg-emerald-500/15 text-emerald-500 hover:bg-emerald-500/25'
                                   }`}
                                 >
                                   {isLoading ? '...' : hasCert ? 'Revoke' : 'Grant'}
@@ -962,28 +982,20 @@ export function ViewUsersPage() {
                             );
                           })}
                           {allMachines.length === 0 && (
-                            <p className="text-xs text-gray-400 text-center py-2">No machines found</p>
+                            <p className="text-xs text-[var(--text-secondary)] text-center py-2">No machines found</p>
                           )}
                         </div>
 
                         <button
                           onClick={() => handleOverrideAllCertificates(user.id)}
                           disabled={updateLoading === user.id}
-                          className="px-3 py-2 text-sm bg-yellow-100 text-yellow-700 rounded hover:bg-yellow-200 disabled:opacity-50 w-full"
+                          className="px-3 py-2 text-sm bg-yellow-500/15 text-yellow-500 rounded hover:bg-yellow-500/25 disabled:opacity-50 w-full"
                         >
                           Grant All Certificates
                         </button>
                       </div>
                     )}
 
-                    <div className="flex justify-end gap-2 pt-4 border-t">
-                      <button
-                        onClick={() => setManagingUserId(null)}
-                        className="px-4 py-2 text-sm border border-gray-300 rounded hover:bg-gray-50"
-                      >
-                        Cancel
-                      </button>
-                    </div>
                   </div>
                 </>
               );

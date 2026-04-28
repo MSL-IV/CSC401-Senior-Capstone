@@ -279,7 +279,7 @@ export function Navbar() {
                   </svg>
                 </button>
                 {menuOpen && (
-                  <div className="absolute right-0 top-full z-20 mt-2 w-56 rounded-2xl border bg-white p-3 text-sm shadow-lg">
+                  <div className="absolute right-0 top-full z-20 mt-2 w-56 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3 text-sm shadow-lg">
                     {profileLoading ? (
                       <div className="rounded-lg bg-[var(--surface-muted)] px-3 py-2 text-[var(--text-secondary)]">
                         Checking permissions...
